@@ -9,10 +9,10 @@ const ESTADOS = ['activo', 'en_pausa', 'completado', 'cancelado']
 const PERIODICIDAD = ['semanal', 'mensual', 'trimestral', 'anual']
 const AREAS_NEGOCIO = ['Ventas', 'Marketing', 'Operaciones', 'RH', 'Finanzas', 'Tecnología', 'Logística', 'Administración']
 const TIPOS_OBJETIVO = [
-  { value: 'crecer', label: '📈 Crecer' },
+  { value: 'crecer',  label: '📈 Crecer' },
   { value: 'reducir', label: '📉 Reducir' },
   { value: 'mantener', label: '🛡 Mantener' },
-  { value: 'lanzar', label: '🚀 Lanzar algo nuevo' },
+  { value: 'lanzar',  label: '🚀 Lanzar algo nuevo' },
 ]
 const ESTADO_COLORS = {
   activo: 'var(--accent)', en_pausa: 'var(--warning)',
@@ -40,44 +40,43 @@ function fmtMXN(n) {
 function totalPresupuestoPlan(items) { return (items || []).reduce((s, x) => s + (parseFloat(x.monto) || 0), 0) }
 function diasActivo(iso) { return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : 0 }
 
-// ─── Barra de progreso visual ─────────────────────────────
-function ProgressBar({ pct, color }) {
+// ─── Calcula pasos de configuración ───────────────────────
+function calcSetup(obj, krsCount, tareasCount) {
+  const krs = krsCount ?? (obj.bos_key_results?.length || 0)
+  const steps = [
+    { id: 'creado',   label: 'Objetivo creado',      done: true },
+    { id: 'plan',     label: 'Plan definido',         done: !!obj.plan_ia },
+    { id: 'metricas', label: 'Métricas configuradas', done: krs > 0 },
+    { id: 'tareas',   label: 'Tareas vinculadas',     done: (tareasCount ?? 0) > 0 },
+    { id: 'activo',   label: 'En seguimiento',        done: obj.estado === 'completado' || (krs > 0 && (obj.bos_key_results || []).some(k => k.progreso > 0)) },
+  ]
+  const done = steps.filter(s => s.done).length
+  const next = steps.find(s => !s.done)
+  return { steps, done, total: steps.length, pct: Math.round((done / steps.length) * 100), nextStep: next }
+}
+
+// ─── Componentes base ─────────────────────────────────────
+function ProgressBar({ pct, color, height = 5 }) {
   return (
-    <div style={{ height: 5, background: 'var(--bg-input)', borderRadius: 3, overflow: 'hidden' }}>
+    <div style={{ height, background: 'var(--bg-input)', borderRadius: 3, overflow: 'hidden' }}>
       <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color || 'var(--accent)', borderRadius: 3, transition: 'width 0.4s' }} />
     </div>
   )
 }
-
-// ─── Chip filtro ──────────────────────────────────────────
 function FilterChip({ active, onClick, children }) {
   return (
     <button type="button" onClick={onClick}
-      style={{
-        padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: active ? 700 : 500,
-        border: `1px solid ${active ? 'var(--accent)' : 'var(--border-2)'}`,
-        background: active ? 'var(--accent)18' : 'var(--bg-input)',
-        color: active ? 'var(--accent)' : 'var(--text-3)',
-        cursor: 'pointer', transition: 'all 0.12s', flexShrink: 0
-      }}>
+      style={{ padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: active ? 700 : 500, border: `1px solid ${active ? 'var(--accent)' : 'var(--border-2)'}`, background: active ? 'var(--accent)18' : 'var(--bg-input)', color: active ? 'var(--accent)' : 'var(--text-3)', cursor: 'pointer', transition: 'all 0.12s', flexShrink: 0 }}>
       {children}
     </button>
   )
 }
-
-// ─── Tabs ─────────────────────────────────────────────────
 function Tabs({ tabs, active, onChange }) {
   return (
-    <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20, gap: 2, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 18, gap: 2, flexWrap: 'wrap' }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          style={{
-            background: 'none', border: 'none', padding: '8px 14px', fontSize: 13,
-            fontWeight: active === t.id ? 700 : 400,
-            color: active === t.id ? 'var(--accent)' : 'var(--text-3)',
-            borderBottom: `2px solid ${active === t.id ? 'var(--accent)' : 'transparent'}`,
-            cursor: 'pointer', marginBottom: -1, transition: 'all 0.12s'
-          }}>
+          style={{ background: 'none', border: 'none', padding: '7px 14px', fontSize: 12, fontWeight: active === t.id ? 700 : 400, color: active === t.id ? 'var(--accent)' : 'var(--text-3)', borderBottom: `2px solid ${active === t.id ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', marginBottom: -1, transition: 'all 0.12s' }}>
           {t.label}
         </button>
       ))}
@@ -85,28 +84,70 @@ function Tabs({ tabs, active, onChange }) {
   )
 }
 
-// ─── Modal de detalle ─────────────────────────────────────
+// ─── Stepper de configuración ─────────────────────────────
+function SetupStepper({ steps, pct }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Configuración del objetivo</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: pct === 100 ? 'var(--success)' : 'var(--accent)' }}>{pct}%</div>
+      </div>
+      <ProgressBar pct={pct} color={pct === 100 ? 'var(--success)' : 'var(--accent)'} height={4} />
+      <div style={{ display: 'flex', gap: 0, marginTop: 10, position: 'relative' }}>
+        {steps.map((s, i) => (
+          <div key={s.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+            {/* Línea conectora */}
+            {i < steps.length - 1 && (
+              <div style={{ position: 'absolute', top: 10, left: '50%', width: '100%', height: 2, background: steps[i + 1].done ? 'var(--success)' : 'var(--border-2)', zIndex: 0 }} />
+            )}
+            {/* Punto */}
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: s.done ? 'var(--success)' : 'var(--bg-input)', border: `2px solid ${s.done ? 'var(--success)' : 'var(--border-2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, flexShrink: 0, transition: 'all 0.2s' }}>
+              {s.done ? <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span> : <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border-2)', display: 'block' }} />}
+            </div>
+            {/* Label */}
+            <div style={{ fontSize: 9, color: s.done ? 'var(--success)' : 'var(--text-3)', textAlign: 'center', marginTop: 4, fontWeight: s.done ? 600 : 400, lineHeight: 1.3, maxWidth: 60 }}>
+              {s.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Panel de detalle ─────────────────────────────────────
 function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros, onReload }) {
   const [tab, setTab] = useState('plan')
   const [tareas, setTareas] = useState([])
-  const [krs, setKrs] = useState([])
+  const [krs, setKrs] = useState(obj.bos_key_results || [])
   const [bitacora, setBitacora] = useState([])
   const [loadingTab, setLoadingTab] = useState(false)
   const [newKr, setNewKr] = useState({ descripcion: '', meta: '', progreso: 0 })
   const [addingKr, setAddingKr] = useState(false)
   const [estado, setEstado] = useState(obj.estado)
 
-  const TABS_DETALLE = [
-    { id: 'plan',        label: '🗺 Plan' },
+  // Plan manual
+  const [modoManual, setModoManual] = useState(false)
+  const [planManualTexto, setPlanManualTexto] = useState(obj.plan_ia?.texto || '')
+  const [planManualAreas, setPlanManualAreas] = useState(obj.plan_ia?.responsables || [])
+  const [savingPlan, setSavingPlan] = useState(false)
+
+  // Plan IA desde detalle
+  const [generandoPlanDetalle, setGenerandoPlanDetalle] = useState(false)
+  const [planIADetalle, setPlanIADetalle] = useState(null)
+  const [aceptandoPlan, setAceptandoPlan] = useState(false)
+
+  const setup = calcSetup(obj, krs.length, tareas.length)
+
+  const TABS = [
+    { id: 'plan',        label: `🗺 Plan${obj.plan_ia ? ' ✓' : ''}` },
     { id: 'tareas',      label: `✅ Tareas${tareas.length > 0 ? ` (${tareas.length})` : ''}` },
     { id: 'metricas',    label: `📊 Métricas${krs.length > 0 ? ` (${krs.length})` : ''}` },
     { id: 'presupuesto', label: '💰 Presupuesto' },
     { id: 'historial',   label: '📋 Historial' },
   ]
 
-  useEffect(() => {
-    loadTabData(tab)
-  }, [tab])
+  useEffect(() => { loadTabData(tab) }, [tab])
 
   async function loadTabData(t) {
     setLoadingTab(true)
@@ -121,23 +162,18 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
         const { data } = await supabase.from('bos_bitacora').select('*').eq('fabrica_id', workspace.id).ilike('titulo', `%${obj.titulo.slice(0, 20)}%`).order('created_at', { ascending: false }).limit(20)
         setBitacora(data || [])
       }
-    } finally {
-      setLoadingTab(false)
-    }
+    } finally { setLoadingTab(false) }
   }
 
   async function handleEstadoChange(nuevoEstado) {
     const { error } = await supabase.from('bos_objetivos').update({ estado: nuevoEstado }).eq('id', obj.id)
     if (error) { toast.error(error.message); return }
-    setEstado(nuevoEstado)
-    toast.success('Estado actualizado')
-    onReload()
+    setEstado(nuevoEstado); toast.success('Estado actualizado'); onReload()
   }
 
-  async function handleTareaEstado(tareaId, nuevoEstado) {
-    const { error } = await supabase.from('bos_tareas').update({ estado: nuevoEstado }).eq('id', tareaId)
-    if (error) { toast.error(error.message); return }
-    setTareas(prev => prev.map(t => t.id === tareaId ? { ...t, estado: nuevoEstado } : t))
+  async function handleTareaEstado(id, nuevoEstado) {
+    const { error } = await supabase.from('bos_tareas').update({ estado: nuevoEstado }).eq('id', id)
+    if (!error) setTareas(prev => prev.map(t => t.id === id ? { ...t, estado: nuevoEstado } : t))
   }
 
   async function handleKrProgreso(krId, progreso) {
@@ -159,59 +195,96 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
     setAddingKr(false)
     if (error) { toast.error(error.message); return }
     setNewKr({ descripcion: '', meta: '', progreso: 0 })
-    toast.success('Métrica añadida')
-    loadTabData('metricas')
-    onReload()
+    toast.success('Métrica añadida'); loadTabData('metricas'); onReload()
   }
 
   async function handleDeleteKr(krId) {
     await supabase.from('bos_key_results').delete().eq('id', krId)
-    setKrs(prev => prev.filter(k => k.id !== krId))
-    onReload()
+    setKrs(prev => prev.filter(k => k.id !== krId)); onReload()
   }
 
-  // Progress desde KRs
-  const progresoKrs = krs.length === 0 ? 0 : Math.round(
-    krs.reduce((s, k) => s + (k.meta ? Math.min(100, (k.progreso / k.meta) * 100) : k.progreso), 0) / krs.length
-  )
-  // Progress desde tareas
+  // Guardar plan manual
+  async function handleSavePlanManual() {
+    if (!planManualTexto.trim() && planManualAreas.length === 0) { toast.error('Escribe el plan o añade áreas'); return }
+    setSavingPlan(true)
+    const planData = {
+      manual: true, texto: planManualTexto.trim(),
+      responsables: planManualAreas.filter(a => a.area?.trim()),
+      presupuesto: obj.plan_ia?.presupuesto || []
+    }
+    const { error } = await supabase.from('bos_objetivos').update({ plan_ia: planData }).eq('id', obj.id)
+    if (error) { toast.error(error.message) } else {
+      toast.success('Plan guardado ✓')
+      setModoManual(false); onReload()
+    }
+    setSavingPlan(false)
+  }
+
+  // Generar plan IA desde el detalle
+  async function handleGenerarPlanIA() {
+    setGenerandoPlanDetalle(true); setPlanIADetalle(null)
+    try {
+      const plan = await generarPlanObjetivo({ titulo: obj.titulo, descripcion: obj.descripcion, area: obj.area, tipo: obj.tipo, periodicidad: obj.periodicidad, fecha_inicio: obj.fecha_inicio, fecha_fin: obj.fecha_fin })
+      setPlanIADetalle(plan)
+    } catch { toast.error('No se pudo generar el plan IA') }
+    finally { setGenerandoPlanDetalle(false) }
+  }
+
+  async function handleAceptarPlanIA() {
+    if (!planIADetalle) return
+    setAceptandoPlan(true)
+    try {
+      if (planIADetalle.tareas?.length) {
+        await supabase.from('bos_tareas').insert(planIADetalle.tareas.map(t => ({ fabrica_id: workspace.id, titulo: t.titulo, objetivo_id: obj.id, descripcion: `${t.descripcion || ''}${t.duracion ? ` (${t.duracion})` : ''}`, estado: 'pendiente', prioridad: 'media', created_by: miembro?.profile_id })))
+      }
+      if (planIADetalle.metricas?.length) {
+        await supabase.from('bos_key_results').insert(planIADetalle.metricas.map(m => ({ objetivo_id: obj.id, fabrica_id: workspace.id, descripcion: `${m.nombre} · ${m.frecuencia} · meta: ${m.meta} ${m.unidad}`, meta: parseFloat(m.meta) || null, progreso: 0 })))
+      }
+      await supabase.from('bos_objetivos').update({ plan_ia: { presupuesto: planIADetalle.presupuesto || [], responsables: planIADetalle.responsables || [] } }).eq('id', obj.id)
+      toast.success(`Plan activado: ${planIADetalle.tareas?.length || 0} tareas · ${planIADetalle.metricas?.length || 0} métricas`)
+      setPlanIADetalle(null); onReload(); loadTabData('tareas'); loadTabData('metricas')
+    } catch (err) { toast.error(err.message) }
+    finally { setAceptandoPlan(false) }
+  }
+
+  const progresoKrs = krs.length === 0 ? 0 : Math.round(krs.reduce((s, k) => s + (k.meta ? Math.min(100, (k.progreso / k.meta) * 100) : k.progreso), 0) / krs.length)
   const tareasHechas = tareas.filter(t => t.estado === 'hecha').length
   const progresoPorTareas = tareas.length === 0 ? 0 : Math.round((tareasHechas / tareas.length) * 100)
-
   const planIA = obj.plan_ia
   const getNombre = (pid) => { const m = miembros.find(x => x.profile_id === pid); return m?.profiles?.nombre || m?.nombre || pid || '—' }
 
   return (
     <div>
-      {/* Header del objetivo */}
-      <div style={{ padding: '16px 20px', background: 'var(--bg-input)', borderRadius: 10, marginBottom: 20 }}>
+      {/* Setup stepper */}
+      <SetupStepper steps={setup.steps} pct={setup.pct} />
+
+      {/* Header */}
+      <div style={{ padding: '14px 16px', background: 'var(--bg-input)', borderRadius: 10, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
               {obj.area && <span style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--accent)15', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{obj.area}</span>}
               {obj.tipo && <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--bg-card)', padding: '2px 8px', borderRadius: 8 }}>{TIPOS_OBJETIVO.find(t => t.value === obj.tipo)?.label || obj.tipo}</span>}
               {obj.fecha_fin && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>📅 Hasta {obj.fecha_fin}</span>}
               <span style={{ fontSize: 11, color: 'var(--text-3)' }}>⏱ {diasActivo(obj.created_at)} días activo</span>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>{obj.titulo}</div>
-            {obj.descripcion && <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{obj.descripcion}</div>}
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{obj.titulo}</div>
+            {obj.descripcion && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{obj.descripcion}</div>}
           </div>
           <select value={estado} onChange={e => handleEstadoChange(e.target.value)}
             style={{ background: ESTADO_COLORS[estado] + '18', border: `1px solid ${ESTADO_COLORS[estado]}40`, borderRadius: 8, color: ESTADO_COLORS[estado], fontSize: 11, fontWeight: 700, padding: '4px 8px', cursor: 'pointer', flexShrink: 0 }}>
             {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
-
-        {/* Progreso doble */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
               <span>Progreso métricas</span><span style={{ fontWeight: 700, color: 'var(--accent)' }}>{progresoKrs}%</span>
             </div>
             <ProgressBar pct={progresoKrs} color="var(--accent)" />
           </div>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
               <span>Tareas completadas</span><span style={{ fontWeight: 700, color: 'var(--success)' }}>{tareasHechas}/{tareas.length || '?'}</span>
             </div>
             <ProgressBar pct={progresoPorTareas} color="var(--success)" />
@@ -219,31 +292,129 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs tabs={TABS_DETALLE} active={tab} onChange={setTab} />
-
-      {loadingTab && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" style={{ width: 24, height: 24, borderWidth: 2 }} /></div>}
+      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      {loadingTab && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" style={{ width: 22, height: 22, borderWidth: 2 }} /></div>}
 
       {/* ── TAB: PLAN ── */}
       {!loadingTab && tab === 'plan' && (
         <div>
-          {!planIA ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🗺</div>
-              <div style={{ fontSize: 14, marginBottom: 4 }}>No hay plan generado todavía</div>
-              <div style={{ fontSize: 12 }}>El plan se genera automáticamente al crear el objetivo</div>
+          {/* Generando desde detalle */}
+          {generandoPlanDetalle && (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3, margin: '0 auto 12px' }} />
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>Generando plan con IA...</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Analizando objetivo, creando tareas y métricas</div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          )}
+
+          {/* Plan IA generado desde detalle (preview) */}
+          {!generandoPlanDetalle && planIADetalle && (
+            <div>
+              <div style={{ padding: '10px 14px', background: 'rgba(0,212,255,0.08)', border: '1px solid var(--accent)40', borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+                  ✨ Plan listo: {planIADetalle.tareas?.length || 0} tareas · {planIADetalle.metricas?.length || 0} métricas
+                </span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setPlanIADetalle(null)}>Descartar</button>
+                  <button className="btn btn-primary btn-sm" onClick={handleAceptarPlanIA} disabled={aceptandoPlan}>
+                    {aceptandoPlan ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> : '✓ Aceptar plan'}
+                  </button>
+                </div>
+              </div>
+              {(planIADetalle.tareas || []).slice(0, 4).map((t, i) => (
+                <div key={i} style={{ padding: '7px 12px', background: 'var(--bg-input)', borderRadius: 7, marginBottom: 5, fontSize: 13, color: 'var(--text-1)' }}>
+                  <span style={{ color: 'var(--accent)', fontWeight: 700, marginRight: 8 }}>{i + 1}</span>{t.titulo}
+                </div>
+              ))}
+              {(planIADetalle.tareas?.length || 0) > 4 && <div style={{ fontSize: 11, color: 'var(--text-3)', padding: '4px 12px' }}>+{planIADetalle.tareas.length - 4} tareas más...</div>}
+            </div>
+          )}
+
+          {/* Sin plan generado */}
+          {!generandoPlanDetalle && !planIADetalle && !planIA && !modoManual && (
+            <div style={{ textAlign: 'center', padding: '28px 0' }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>🗺</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>No hay plan definido todavía</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 20 }}>Define el camino para alcanzar este objetivo</div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" onClick={handleGenerarPlanIA}>
+                  ✨ Generar plan con IA
+                </button>
+                <button className="btn btn-secondary" onClick={() => setModoManual(true)}>
+                  ✏ Crear plan manualmente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Modo manual */}
+          {!generandoPlanDetalle && !planIADetalle && modoManual && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label" style={{ marginBottom: 6 }}>Descripción del plan</label>
+                <textarea className="input" value={planManualTexto} onChange={e => setPlanManualTexto(e.target.value)}
+                  rows={5} placeholder="Describe el plan de acción para alcanzar este objetivo. ¿Qué pasos se seguirán? ¿Qué recursos se necesitan? ¿Cuáles son los hitos clave?"
+                  style={{ fontSize: 13, lineHeight: 1.7, resize: 'vertical' }} />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label className="label" style={{ marginBottom: 0 }}>Áreas involucradas</label>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setPlanManualAreas(prev => [...prev, { area: '', rol: 'lidera', descripcion: '' }])}>+ Añadir área</button>
+                </div>
+                {planManualAreas.map((a, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 3fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                    <input className="input" value={a.area} onChange={e => setPlanManualAreas(prev => prev.map((x, xi) => xi === i ? { ...x, area: e.target.value } : x))} placeholder="Área (ej: Ventas)" style={{ fontSize: 12 }} />
+                    <select className="input" value={a.rol} onChange={e => setPlanManualAreas(prev => prev.map((x, xi) => xi === i ? { ...x, rol: e.target.value } : x))} style={{ fontSize: 12 }}>
+                      <option value="lidera">Lidera</option>
+                      <option value="apoya">Apoya</option>
+                      <option value="informa">Informa</option>
+                    </select>
+                    <input className="input" value={a.descripcion} onChange={e => setPlanManualAreas(prev => prev.map((x, xi) => xi === i ? { ...x, descripcion: e.target.value } : x))} placeholder="¿Qué hace este área?" style={{ fontSize: 12 }} />
+                    <button onClick={() => setPlanManualAreas(prev => prev.filter((_, xi) => xi !== i))} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: 16, padding: 4 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => { setModoManual(false); setPlanManualTexto(obj.plan_ia?.texto || '') }}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleSavePlanManual} disabled={savingPlan}>
+                  {savingPlan ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : '💾 Guardar plan'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Plan existente (IA o manual) */}
+          {!generandoPlanDetalle && !planIADetalle && !modoManual && planIA && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Indicador de tipo de plan */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--bg-input)', padding: '3px 10px', borderRadius: 6 }}>
+                  {planIA.manual ? '✏ Plan manual' : '✨ Plan generado por IA'}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setModoManual(true); setPlanManualTexto(planIA.texto || ''); setPlanManualAreas(planIA.responsables || []) }}>Editar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={handleGenerarPlanIA} title="Regenerar con IA">🔄 IA</button>
+                </div>
+              </div>
+
+              {/* Texto del plan (si es manual) */}
+              {planIA.manual && planIA.texto && (
+                <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.75, background: 'var(--bg-input)', padding: '12px 14px', borderRadius: 8, whiteSpace: 'pre-line' }}>
+                  {planIA.texto}
+                </div>
+              )}
+
               {/* Responsables */}
               {planIA.responsables?.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>👥 Áreas involucradas</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>👥 Áreas involucradas</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                     {planIA.responsables.map((r, i) => (
-                      <div key={i} style={{ padding: '12px 14px', background: 'var(--bg-input)', borderRadius: 8, borderLeft: `3px solid ${ROL_COLORS[r.rol] || 'var(--border)'}` }}>
+                      <div key={i} style={{ padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8, borderLeft: `3px solid ${ROL_COLORS[r.rol] || 'var(--border)'}` }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 2 }}>{r.area}</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: ROL_COLORS[r.rol] || 'var(--text-3)', marginBottom: 4 }}>{r.rol}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: ROL_COLORS[r.rol] || 'var(--text-3)', marginBottom: 3 }}>{r.rol}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.4 }}>{r.descripcion}</div>
                       </div>
                     ))}
@@ -251,15 +422,14 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                 </div>
               )}
 
-              {/* Resumen presupuesto en Plan */}
+              {/* Resumen presupuesto */}
               {planIA.presupuesto?.length > 0 && (
-                <div style={{ padding: '12px 16px', background: 'rgba(16,185,129,0.06)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ padding: '10px 14px', background: 'rgba(16,185,129,0.06)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Presupuesto total estimado</span>
                   <span style={{ fontSize: 18, fontWeight: 800, color: '#10b981' }}>{fmtMXN(totalPresupuestoPlan(planIA.presupuesto))}</span>
                 </div>
               )}
 
-              {/* Responsable del objetivo */}
               {obj.responsable && (
                 <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
                   Responsable principal: <strong style={{ color: 'var(--text-1)' }}>{getNombre(obj.responsable)}</strong>
@@ -274,15 +444,14 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       {!loadingTab && tab === 'tareas' && (
         <div>
           {tareas.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+            <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
               <div style={{ fontSize: 14 }}>No hay tareas vinculadas a este objetivo</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Ve a Tareas y vincula este objetivo al crear o editar una tarea</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>En el módulo de Tareas, selecciona este objetivo al crear una tarea</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {/* Mini resumen */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                 {['pendiente', 'en_progreso', 'bloqueada', 'hecha'].map(e => {
                   const cnt = tareas.filter(t => t.estado === e).length
                   if (!cnt) return null
@@ -290,27 +459,16 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                 })}
               </div>
               {tareas.map(t => (
-                <div key={t.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                  background: 'var(--bg-card)', border: `1px solid var(--border)`,
-                  borderLeft: `4px solid ${ESTADO_TAREAS_COLORS[t.estado] || 'var(--border)'}`,
-                  borderRadius: 8
-                }}>
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--bg-card)', border: `1px solid var(--border)`, borderLeft: `4px solid ${ESTADO_TAREAS_COLORS[t.estado] || 'var(--border)'}`, borderRadius: 8 }}>
                   <select value={t.estado} onChange={e => handleTareaEstado(t.id, e.target.value)}
                     style={{ background: 'var(--bg-input)', border: '1px solid var(--border-2)', borderRadius: 6, color: ESTADO_TAREAS_COLORS[t.estado], fontSize: 11, fontWeight: 700, padding: '3px 6px', cursor: 'pointer', flexShrink: 0 }}>
                     {TODOS_ESTADOS_TAREA.map(e => <option key={e} value={e}>{ESTADO_TAREAS_LABELS[e]}</option>)}
                   </select>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: t.estado === 'hecha' ? 'var(--text-3)' : 'var(--text-1)', textDecoration: t.estado === 'hecha' ? 'line-through' : 'none' }} className="truncate">
-                      {t.titulo}
-                    </div>
-                    {t.fecha_limite && (
-                      <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>📅 {t.fecha_limite}</div>
-                    )}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: t.estado === 'hecha' ? 'var(--text-3)' : 'var(--text-1)', textDecoration: t.estado === 'hecha' ? 'line-through' : 'none' }} className="truncate">{t.titulo}</div>
+                    {t.fecha_limite && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>📅 {t.fecha_limite}</div>}
                   </div>
-                  {t.prioridad && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: t.prioridad === 'alta' || t.prioridad === 'critica' ? 'var(--danger)' : 'var(--text-3)', textTransform: 'uppercase', flexShrink: 0 }}>{t.prioridad}</span>
-                  )}
+                  {t.prioridad && <span style={{ fontSize: 10, fontWeight: 700, color: t.prioridad === 'alta' || t.prioridad === 'critica' ? 'var(--danger)' : 'var(--text-3)', textTransform: 'uppercase', flexShrink: 0 }}>{t.prioridad}</span>}
                 </div>
               ))}
             </div>
@@ -325,8 +483,8 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
             const pct = kr.meta ? Math.min(100, Math.round((kr.progreso / kr.meta) * 100)) : kr.progreso
             const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--accent)'
             return (
-              <div key={kr.id} style={{ padding: '14px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+              <div key={kr.id} style={{ padding: '12px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', flex: 1 }}>{kr.descripcion}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 16, fontWeight: 800, color, flexShrink: 0 }}>{pct}%</span>
@@ -334,30 +492,19 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input type="range" min={0} max={kr.meta || 100} step={1}
-                    value={kr.progreso}
-                    onChange={e => handleKrProgreso(kr.id, e.target.value)}
-                    style={{ flex: 1, accentColor: color }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600, minWidth: 60, textAlign: 'right' }}>
-                    {kr.progreso}{kr.meta ? `/${kr.meta}` : '%'}
-                  </span>
+                  <input type="range" min={0} max={kr.meta || 100} step={1} value={kr.progreso} onChange={e => handleKrProgreso(kr.id, e.target.value)} style={{ flex: 1, accentColor: color }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600, minWidth: 55, textAlign: 'right' }}>{kr.progreso}{kr.meta ? `/${kr.meta}` : '%'}</span>
                 </div>
                 <ProgressBar pct={pct} color={color} />
               </div>
             )
           })}
-
-          {/* Añadir KR */}
-          <div style={{ padding: '14px 16px', background: 'var(--bg-input)', border: '1px dashed var(--border-2)', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 10 }}>+ Nueva métrica / Key Result</div>
+          <div style={{ padding: '12px 14px', background: 'var(--bg-input)', border: '1px dashed var(--border-2)', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 8 }}>+ Nueva métrica / Key Result</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <input className="input" style={{ flex: 2, minWidth: 180, fontSize: 12 }} value={newKr.descripcion}
-                onChange={e => setNewKr(p => ({ ...p, descripcion: e.target.value }))}
-                placeholder="Ej: Ventas mensuales" />
-              <input className="input" style={{ width: 90, fontSize: 12 }} type="number" value={newKr.meta}
-                onChange={e => setNewKr(p => ({ ...p, meta: e.target.value }))} placeholder="Meta" />
-              <input className="input" style={{ width: 90, fontSize: 12 }} type="number" value={newKr.progreso}
-                onChange={e => setNewKr(p => ({ ...p, progreso: e.target.value }))} placeholder="Actual" />
+              <input className="input" style={{ flex: 2, minWidth: 160, fontSize: 12 }} value={newKr.descripcion} onChange={e => setNewKr(p => ({ ...p, descripcion: e.target.value }))} placeholder="Ej: Ventas mensuales" />
+              <input className="input" style={{ width: 80, fontSize: 12 }} type="number" value={newKr.meta} onChange={e => setNewKr(p => ({ ...p, meta: e.target.value }))} placeholder="Meta" />
+              <input className="input" style={{ width: 80, fontSize: 12 }} type="number" value={newKr.progreso} onChange={e => setNewKr(p => ({ ...p, progreso: e.target.value }))} placeholder="Actual" />
               <button className="btn btn-primary btn-sm" onClick={handleAddKr} disabled={addingKr}>
                 {addingKr ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> : 'Agregar'}
               </button>
@@ -370,25 +517,24 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       {!loadingTab && tab === 'presupuesto' && (
         <div>
           {!planIA?.presupuesto?.length ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>💰</div>
+            <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>💰</div>
               <div style={{ fontSize: 14 }}>Sin presupuesto registrado</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>El plan IA incluye presupuesto automático al crear el objetivo</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Genera un plan con IA para obtener estimados de presupuesto</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {/* Total */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>Total estimado</span>
-                <span style={{ fontSize: 22, fontWeight: 900, color: '#10b981' }}>{fmtMXN(totalPresupuestoPlan(planIA.presupuesto))}</span>
+                <span style={{ fontSize: 20, fontWeight: 900, color: '#10b981' }}>{fmtMXN(totalPresupuestoPlan(planIA.presupuesto))}</span>
               </div>
               {planIA.presupuesto.map((p, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', marginBottom: 2 }}>{p.categoria}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{p.justificacion}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{p.justificacion}</div>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981', flexShrink: 0 }}>{fmtMXN(p.monto)}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#10b981', flexShrink: 0 }}>{fmtMXN(p.monto)}</div>
                 </div>
               ))}
             </div>
@@ -400,14 +546,14 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       {!loadingTab && tab === 'historial' && (
         <div>
           {bitacora.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+            <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-3)' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
               <div style={{ fontSize: 14 }}>Sin actividad registrada</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {bitacora.map(e => (
-                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '8px 10px', borderRadius: 7 }}>
+                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '7px 10px', borderRadius: 7 }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0, marginTop: 6 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{e.titulo}</div>
@@ -441,7 +587,7 @@ export default function Objetivos() {
   const [kpisDisponibles, setKpisDisponibles] = useState([])
   const [detalleObj, setDetalleObj] = useState(null)
 
-  // Plan IA
+  // Plan IA (al crear)
   const [objetivoParaPlan, setObjetivoParaPlan] = useState(null)
   const [generandoPlan, setGenerandoPlan] = useState(false)
   const [planIA, setPlanIA] = useState(null)
@@ -512,21 +658,10 @@ export default function Objetivos() {
     setAceptandoPlan(true)
     try {
       if (planIA.tareas?.length) {
-        const tp = planIA.tareas.map(t => ({
-          fabrica_id: workspace.id, titulo: t.titulo, objetivo_id: objetivoParaPlan.id,
-          descripcion: `${t.descripcion || ''}${t.duracion ? ` (${t.duracion})` : ''}`, estado: 'pendiente', prioridad: 'media', created_by: miembro?.profile_id
-        }))
-        const { error } = await supabase.from('bos_tareas').insert(tp)
-        if (error) throw error
+        await supabase.from('bos_tareas').insert(planIA.tareas.map(t => ({ fabrica_id: workspace.id, titulo: t.titulo, objetivo_id: objetivoParaPlan.id, descripcion: `${t.descripcion || ''}${t.duracion ? ` (${t.duracion})` : ''}`, estado: 'pendiente', prioridad: 'media', created_by: miembro?.profile_id })))
       }
       if (planIA.metricas?.length) {
-        const kp = planIA.metricas.map(m => ({
-          objetivo_id: objetivoParaPlan.id, fabrica_id: workspace.id,
-          descripcion: `${m.nombre} · ${m.frecuencia} · meta: ${m.meta} ${m.unidad}`,
-          meta: parseFloat(m.meta) || null, progreso: 0
-        }))
-        const { error } = await supabase.from('bos_key_results').insert(kp)
-        if (error) throw error
+        await supabase.from('bos_key_results').insert(planIA.metricas.map(m => ({ objetivo_id: objetivoParaPlan.id, fabrica_id: workspace.id, descripcion: `${m.nombre} · ${m.frecuencia} · meta: ${m.meta} ${m.unidad}`, meta: parseFloat(m.meta) || null, progreso: 0 })))
       }
       await supabase.from('bos_objetivos').update({ plan_ia: { presupuesto: planIA.presupuesto || [], responsables: planIA.responsables || [] } }).eq('id', objetivoParaPlan.id)
       toast.success(`Plan activado: ${planIA.tareas?.length || 0} tareas · ${planIA.metricas?.length || 0} métricas`)
@@ -535,7 +670,6 @@ export default function Objetivos() {
     finally { setAceptandoPlan(false) }
   }
 
-  // Edición inline plan
   function updatePlanTarea(i, f, v) { setPlanIA(p => ({ ...p, tareas: p.tareas.map((t, idx) => idx === i ? { ...t, [f]: v } : t) })) }
   function removePlanTarea(i)        { setPlanIA(p => ({ ...p, tareas: p.tareas.filter((_, idx) => idx !== i) })) }
   function updatePlanMetrica(i, f, v){ setPlanIA(p => ({ ...p, metricas: p.metricas.map((m, idx) => idx === i ? { ...m, [f]: v } : m) })) }
@@ -563,7 +697,6 @@ export default function Objetivos() {
 
   return (
     <div className="page">
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 className="page-title" style={{ marginBottom: 2 }}>Objetivos</h1>
@@ -578,9 +711,7 @@ export default function Objetivos() {
 
       {/* Filtros */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        <FilterChip active={filtroEstado === 'all'} onClick={() => setFiltroEstado('all')}>
-          Todos ({objetivos.length})
-        </FilterChip>
+        <FilterChip active={filtroEstado === 'all'} onClick={() => setFiltroEstado('all')}>Todos ({objetivos.length})</FilterChip>
         {ESTADOS.map(e => {
           const cnt = objetivos.filter(o => o.estado === e).length
           if (!cnt) return null
@@ -590,10 +721,7 @@ export default function Objetivos() {
 
       {/* Lista */}
       {objetivosFiltrados.length === 0 ? (
-        <div className="empty-state">
-          <div className="icon">🎯</div>
-          <p>No hay objetivos</p>
-        </div>
+        <div className="empty-state"><div className="icon">🎯</div><p>No hay objetivos</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {objetivosFiltrados.map(obj => {
@@ -601,6 +729,7 @@ export default function Objetivos() {
             const krs = obj.bos_key_results || []
             const semColor = progreso >= 80 ? 'var(--success)' : progreso >= 50 ? 'var(--warning)' : 'var(--accent)'
             const isSelected = detalleObj?.id === obj.id
+            const setup = calcSetup(obj)
 
             return (
               <div key={obj.id}>
@@ -616,19 +745,32 @@ export default function Objetivos() {
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: ESTADO_COLORS[obj.estado], textTransform: 'uppercase' }}>{obj.estado}</span>
                         {obj.area && <span style={{ fontSize: 10, color: 'var(--accent)', background: 'var(--accent)12', padding: '1px 7px', borderRadius: 8 }}>{obj.area}</span>}
                         {obj.tipo && <span style={{ fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-input)', padding: '1px 7px', borderRadius: 8 }}>{TIPOS_OBJETIVO.find(t => t.value === obj.tipo)?.label || obj.tipo}</span>}
                         {obj.fecha_fin && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>📅 {obj.fecha_fin}</span>}
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 8 }} className="truncate">{obj.titulo}</div>
+
+                      {/* Setup progress (si no está completo) */}
+                      {setup.pct < 100 ? (
+                        <div style={{ marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-3)', marginBottom: 3 }}>
+                            <span>⚙ Configuración {setup.done}/{setup.total}</span>
+                            {setup.nextStep && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>→ {setup.nextStep.label}</span>}
+                          </div>
+                          <ProgressBar pct={setup.pct} color={setup.pct === 100 ? 'var(--success)' : '#f59e0b'} height={3} />
+                        </div>
+                      ) : null}
+
+                      {/* Progreso real (métricas) */}
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-3)', marginBottom: 2 }}>
                           <span>{krs.length} métricas</span>
                           <span style={{ fontWeight: 700, color: semColor }}>{progreso}%</span>
                         </div>
-                        <ProgressBar pct={progreso} color={semColor} />
+                        <ProgressBar pct={progreso} color={semColor} height={5} />
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -641,17 +783,13 @@ export default function Objetivos() {
                   </div>
                 </div>
 
-                {/* Panel de detalle expandido */}
                 {isSelected && (
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--accent)30', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 20px', marginTop: -1 }}>
                     <ObjetivoDetalle
                       obj={obj}
                       onClose={() => setDetalleObj(null)}
                       onEditar={() => { setForm({ titulo: obj.titulo, descripcion: obj.descripcion || '', responsable: obj.responsable || '', fecha_inicio: obj.fecha_inicio || '', fecha_fin: obj.fecha_fin || '', periodicidad: obj.periodicidad || 'mensual', estado: obj.estado, kpi_ids: obj.kpi_ids || [], area: obj.area || '', tipo: obj.tipo || 'crecer' }); setEditId(obj.id); setModalOpen(true) }}
-                      workspace={workspace}
-                      miembro={miembro}
-                      miembros={miembros}
-                      onReload={loadObjetivos}
+                      workspace={workspace} miembro={miembro} miembros={miembros} onReload={loadObjetivos}
                     />
                   </div>
                 )}
@@ -701,7 +839,7 @@ export default function Objetivos() {
           </div>
           {!editId && (
             <div style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--accent)12', padding: '7px 10px', borderRadius: 6 }}>
-              ✨ La IA generará tareas, métricas y presupuesto automáticamente al crear.
+              ✨ La IA generará tareas, métricas y presupuesto automáticamente al crear — o puedes crear el plan manualmente después.
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -755,18 +893,16 @@ export default function Objetivos() {
         </div>
       </Modal>
 
-      {/* Modal Plan IA */}
+      {/* Modal Plan IA (al crear) */}
       <Modal
         open={!!objetivoParaPlan}
         onClose={() => { if (!generandoPlan && !aceptandoPlan) { setObjetivoParaPlan(null); setPlanIA(null) } }}
         title={generandoPlan ? '✨ Generando plan...' : '✨ Plan generado por IA'} size="xl"
         footer={!generandoPlan && planIA ? (
           <>
-            <button className="btn btn-secondary" onClick={() => { setObjetivoParaPlan(null); setPlanIA(null) }}>Omitir plan</button>
+            <button className="btn btn-secondary" onClick={() => { setObjetivoParaPlan(null); setPlanIA(null) }}>Omitir — crear manualmente después</button>
             <button className="btn btn-primary" onClick={aceptarPlan} disabled={aceptandoPlan}>
-              {aceptandoPlan
-                ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />Creando...</>
-                : `✓ Aceptar (${planIA.tareas?.length || 0} tareas · ${planIA.metricas?.length || 0} métricas)`}
+              {aceptandoPlan ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} />Creando...</> : `✓ Aceptar (${planIA.tareas?.length || 0} tareas · ${planIA.metricas?.length || 0} métricas)`}
             </button>
           </>
         ) : undefined}
@@ -778,35 +914,35 @@ export default function Objetivos() {
             <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Generando tareas, métricas, presupuesto y responsables</div>
           </div>
         ) : planIA ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
             {/* Tareas */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 ✅ Tareas sugeridas <span style={{ fontSize: 11, background: 'var(--bg-input)', color: 'var(--text-3)', padding: '2px 8px', borderRadius: 10 }}>{planIA.tareas?.length || 0}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 'auto' }}>Edita antes de aceptar</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {(planIA.tareas || []).map((t, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', background: 'var(--bg-input)', borderRadius: 8 }}>
-                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, minWidth: 18, paddingTop: 10 }}>{i + 1}</span>
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', background: 'var(--bg-input)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, minWidth: 18, paddingTop: 9 }}>{i + 1}</span>
                     <div style={{ flex: 1 }}>
-                      <input className="input" style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }} value={t.titulo} onChange={e => updatePlanTarea(i, 'titulo', e.target.value)} />
+                      <input className="input" style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }} value={t.titulo} onChange={e => updatePlanTarea(i, 'titulo', e.target.value)} />
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{t.descripcion}{t.duracion && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>· {t.duracion}</span>}</div>
                     </div>
-                    <button onClick={() => removePlanTarea(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: 18, padding: '6px 4px', lineHeight: 1 }}>✕</button>
+                    <button onClick={() => removePlanTarea(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: 18, padding: '5px 4px', lineHeight: 1 }}>✕</button>
                   </div>
                 ))}
               </div>
             </div>
             {/* Métricas */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 📊 Métricas <span style={{ fontSize: 11, background: 'var(--bg-input)', color: 'var(--text-3)', padding: '2px 8px', borderRadius: 10 }}>{planIA.metricas?.length || 0}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 'auto' }}>Se crearán como Key Results</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {(planIA.metricas || []).map((m, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px auto', gap: 10, alignItems: 'center', padding: '10px 14px', background: 'var(--bg-input)', borderRadius: 8 }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px auto', gap: 10, alignItems: 'center', padding: '9px 12px', background: 'var(--bg-input)', borderRadius: 8 }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.nombre}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{m.frecuencia} · {m.unidad}</div>
@@ -822,15 +958,15 @@ export default function Objetivos() {
             </div>
             {/* Presupuesto */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 💰 Presupuesto
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 10px', borderRadius: 10 }}>
                   {fmtMXN(totalPresupuestoPlan(planIA.presupuesto))}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {(planIA.presupuesto || []).map((p, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 10, alignItems: 'center', padding: '10px 14px', background: 'var(--bg-input)', borderRadius: 8 }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 10, alignItems: 'center', padding: '9px 12px', background: 'var(--bg-input)', borderRadius: 8 }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{p.categoria}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{p.justificacion}</div>
@@ -846,13 +982,13 @@ export default function Objetivos() {
             </div>
             {/* Responsables */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 10 }}>👥 Áreas involucradas</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 8 }}>👥 Áreas involucradas</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                 {(planIA.responsables || []).map((r, i) => (
-                  <div key={i} style={{ padding: '12px 14px', background: 'var(--bg-input)', borderRadius: 8, borderLeft: `3px solid ${ROL_COLORS[r.rol] || 'var(--border)'}`, position: 'relative' }}>
+                  <div key={i} style={{ padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8, borderLeft: `3px solid ${ROL_COLORS[r.rol] || 'var(--border)'}`, position: 'relative' }}>
                     <button onClick={() => removePlanResp(i)} style={{ position: 'absolute', top: 6, right: 6, background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: 16, padding: 2, lineHeight: 1 }}>✕</button>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 2, paddingRight: 20 }}>{r.area}</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: ROL_COLORS[r.rol] || 'var(--text-3)', marginBottom: 4 }}>{r.rol}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: ROL_COLORS[r.rol] || 'var(--text-3)', marginBottom: 3 }}>{r.rol}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{r.descripcion}</div>
                   </div>
                 ))}
