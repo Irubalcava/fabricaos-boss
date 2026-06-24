@@ -7,13 +7,43 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 
 const TIPOS = ['numero', 'porcentaje', 'moneda', 'booleano']
 const FRECUENCIAS = ['diario', 'semanal', 'mensual']
+const AREAS = ['Ventas', 'Marketing', 'Operaciones', 'RH', 'Finanzas', 'Tecnología', 'Logística', 'Administración', 'Otro']
 
 function empty() {
-  return { nombre: '', descripcion: '', tipo: 'numero', meta: '', unidad: '', frecuencia: 'mensual' }
+  return { nombre: '', descripcion: '', tipo: 'numero', meta: '', unidad: '', frecuencia: 'mensual', responsable: '', area: '', plan: '' }
+}
+
+function calcDesglose(meta, frecuencia, tipo, unidad) {
+  const m = parseFloat(meta)
+  if (!m || tipo === 'booleano') return null
+  const fmt = v => {
+    const n = Math.round(v * 100) / 100
+    if (tipo === 'moneda') return `$${n.toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+    if (tipo === 'porcentaje') return `${n}%`
+    return `${n}${unidad ? ' ' + unidad : ''}`
+  }
+  if (frecuencia === 'diario') return [
+    { label: 'Día', valor: fmt(m) },
+    { label: 'Semana', valor: fmt(m * 7) },
+    { label: 'Mes', valor: fmt(m * 30) },
+    { label: 'Trimestre', valor: fmt(m * 90) },
+  ]
+  if (frecuencia === 'semanal') return [
+    { label: 'Día', valor: fmt(m / 7) },
+    { label: 'Semana', valor: fmt(m) },
+    { label: 'Mes', valor: fmt(m * 4.33) },
+    { label: 'Trimestre', valor: fmt(m * 13) },
+  ]
+  return [
+    { label: 'Día', valor: fmt(m / 30) },
+    { label: 'Semana', valor: fmt(m / 4.33) },
+    { label: 'Mes', valor: fmt(m) },
+    { label: 'Trimestre', valor: fmt(m * 3) },
+  ]
 }
 
 export default function KPIs() {
-  const { workspace, miembro } = useStore()
+  const { workspace, miembro, miembros } = useStore()
   const [kpis, setKpis] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -21,7 +51,6 @@ export default function KPIs() {
   const [form, setForm] = useState(empty())
   const [editId, setEditId] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [mediciones, setMediciones] = useState({})
   const [medicionValor, setMedicionValor] = useState('')
   const [medicionNota, setMedicionNota] = useState('')
   const [selectedKpi, setSelectedKpi] = useState(null)
@@ -53,6 +82,9 @@ export default function KPIs() {
         meta: form.meta ? parseFloat(form.meta) : null,
         unidad: form.unidad.trim() || null,
         frecuencia: form.frecuencia,
+        responsable: form.responsable || null,
+        area: form.area || null,
+        plan: form.plan.trim() || null,
         activo: true,
         created_by: miembro?.profile_id
       }
@@ -113,6 +145,11 @@ export default function KPIs() {
     loadKPIs()
   }
 
+  function getNombreMiembro(profileId) {
+    const m = (miembros || []).find(x => x.profile_id === profileId)
+    return m?.profiles?.nombre || m?.profiles?.email || profileId || '—'
+  }
+
   function getUltimoValor(kpi) {
     const meds = kpi.bos_kpi_mediciones || []
     if (!meds.length) return null
@@ -143,6 +180,8 @@ export default function KPIs() {
   if (loading) {
     return <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}><div className="spinner" /></div>
   }
+
+  const desglose = form.meta && form.tipo !== 'booleano' ? calcDesglose(form.meta, form.frecuencia, form.tipo, form.unidad) : null
 
   return (
     <div className="page">
@@ -178,14 +217,26 @@ export default function KPIs() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{kpi.nombre}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
-                      {kpi.tipo} · {kpi.frecuencia}
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span>{kpi.tipo} · {kpi.frecuencia}</span>
+                      {kpi.area && (
+                        <span style={{ background: 'var(--accent)22', color: 'var(--accent)', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>
+                          {kpi.area}
+                        </span>
+                      )}
+                      {kpi.responsable && (
+                        <span>· {getNombreMiembro(kpi.responsable)}</span>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setModalMedicion(kpi)}>+ Valor</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => {
-                      setForm({ nombre: kpi.nombre, descripcion: kpi.descripcion || '', tipo: kpi.tipo, meta: kpi.meta?.toString() || '', unidad: kpi.unidad || '', frecuencia: kpi.frecuencia })
+                      setForm({
+                        nombre: kpi.nombre, descripcion: kpi.descripcion || '', tipo: kpi.tipo,
+                        meta: kpi.meta?.toString() || '', unidad: kpi.unidad || '', frecuencia: kpi.frecuencia,
+                        responsable: kpi.responsable || '', area: kpi.area || '', plan: kpi.plan || ''
+                      })
                       setEditId(kpi.id)
                       setModalOpen(true)
                     }}>✏</button>
@@ -212,17 +263,39 @@ export default function KPIs() {
                   </div>
                 )}
 
-                {selectedKpi?.id === kpi.id && chartData.length > 1 && (
-                  <div style={{ height: 100 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData}>
-                        <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: 'var(--text-3)' }} />
-                        <YAxis hide />
-                        <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-2)', borderRadius: 6, fontSize: 12 }} />
-                        <Line type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                {selectedKpi?.id === kpi.id && (
+                  <>
+                    {chartData.length > 1 && (
+                      <div style={{ height: 100 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData}>
+                            <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: 'var(--text-3)' }} />
+                            <YAxis hide />
+                            <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-2)', borderRadius: 6, fontSize: 12 }} />
+                            <Line type="monotone" dataKey="valor" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                    {kpi.plan && (
+                      <div style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--bg-input)', padding: '8px 10px', borderRadius: 6, lineHeight: 1.5 }}>
+                        <span style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-3)' }}>Plan: </span>{kpi.plan}
+                      </div>
+                    )}
+                    {kpi.meta && kpi.tipo !== 'booleano' && (() => {
+                      const d = calcDesglose(kpi.meta, kpi.frecuencia, kpi.tipo, kpi.unidad)
+                      return d ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                          {d.map(({ label, valor }) => (
+                            <div key={label} style={{ textAlign: 'center', background: 'var(--bg-input)', borderRadius: 6, padding: '6px 4px' }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{valor}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null
+                    })()}
+                  </>
                 )}
               </div>
             )
@@ -250,6 +323,26 @@ export default function KPIs() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
+              <label className="label">Área</label>
+              <select className="input" value={form.area} onChange={e => setForm(p => ({ ...p, area: e.target.value }))}>
+                <option value="">Sin área</option>
+                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="label">Encargado</label>
+              <select className="input" value={form.responsable} onChange={e => setForm(p => ({ ...p, responsable: e.target.value }))}>
+                <option value="">Sin asignar</option>
+                {(miembros || []).map(m => (
+                  <option key={m.profile_id} value={m.profile_id}>
+                    {m.profiles?.nombre || m.profiles?.email || m.profile_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
               <label className="label">Tipo</label>
               <select className="input" value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}>
                 {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -271,6 +364,23 @@ export default function KPIs() {
               <label className="label">Unidad</label>
               <input className="input" value={form.unidad} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))} placeholder="Ej: piezas, kg, hrs" />
             </div>
+          </div>
+          {desglose && (
+            <div style={{ background: 'var(--bg-input)', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, fontWeight: 600 }}>DESGLOSE DE META</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {desglose.map(({ label, valor }) => (
+                  <div key={label} style={{ textAlign: 'center', background: 'var(--bg-card)', borderRadius: 6, padding: '6px 4px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{valor}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="form-group">
+            <label className="label">Plan para alcanzar la meta</label>
+            <textarea className="input" rows={3} value={form.plan} onChange={e => setForm(p => ({ ...p, plan: e.target.value }))} placeholder="Estrategia, acciones clave, recursos necesados..." style={{ resize: 'vertical' }} />
           </div>
         </div>
       </Modal>

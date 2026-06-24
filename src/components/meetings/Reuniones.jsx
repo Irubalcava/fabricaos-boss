@@ -16,7 +16,9 @@ function empty() {
     hora_inicio: '09:00',
     hora_fin: '10:00',
     descripcion: '',
-    estado: 'programada'
+    estado: 'programada',
+    invitados: [],
+    sucursal: ''
   }
 }
 
@@ -75,6 +77,8 @@ export default function Reuniones() {
         hora_fin: form.hora_fin || null,
         descripcion: form.descripcion.trim() || null,
         estado: form.estado,
+        invitados: form.invitados.length ? form.invitados : null,
+        sucursal: form.sucursal.trim() || null,
         created_by: miembro?.profile_id
       }
       if (editId) {
@@ -200,6 +204,8 @@ Resumen ejecutivo:`
                   <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>{r.titulo}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
                     {r.fecha} {r.hora_inicio && `· ${r.hora_inicio}${r.hora_fin ? ' – ' + r.hora_fin : ''}`}
+                    {r.sucursal && ` · ${r.sucursal}`}
+                    {r.invitados?.length > 0 && ` · ${r.invitados.length} invitado${r.invitados.length > 1 ? 's' : ''}`}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
@@ -211,7 +217,7 @@ Resumen ejecutivo:`
                     {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                   <button className="btn btn-ghost btn-sm" onClick={() => {
-                    setForm({ titulo: r.titulo, tipo: r.tipo, fecha: r.fecha, hora_inicio: r.hora_inicio || '', hora_fin: r.hora_fin || '', descripcion: r.descripcion || '', estado: r.estado })
+                    setForm({ titulo: r.titulo, tipo: r.tipo, fecha: r.fecha, hora_inicio: r.hora_inicio || '', hora_fin: r.hora_fin || '', descripcion: r.descripcion || '', estado: r.estado, invitados: r.invitados || [], sucursal: r.sucursal || '' })
                     setEditId(r.id)
                     setModalOpen(true)
                   }}>✏</button>
@@ -293,6 +299,38 @@ Resumen ejecutivo:`
             <label className="label">Agenda / Descripción</label>
             <textarea className="input" value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} placeholder="¿Qué se tratará en esta reunión?" />
           </div>
+          <div className="form-group">
+            <label className="label">Sucursal / Lugar</label>
+            <input className="input" value={form.sucursal} onChange={e => setForm(p => ({ ...p, sucursal: e.target.value }))} placeholder="Ej: Planta norte, Sala de juntas, Zoom..." />
+          </div>
+          <div className="form-group">
+            <label className="label">Invitados</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(miembros || []).map(m => {
+                const id = m.profile_id
+                const nombre = m.profiles?.nombre || m.profiles?.email || id
+                const selected = form.invitados.includes(id)
+                return (
+                  <button key={id} type="button"
+                    onClick={() => setForm(p => ({
+                      ...p,
+                      invitados: selected ? p.invitados.filter(x => x !== id) : [...p.invitados, id]
+                    }))}
+                    style={{
+                      padding: '4px 10px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border-2)'}`,
+                      background: selected ? 'var(--accent)22' : 'var(--bg-input)',
+                      color: selected ? 'var(--accent)' : 'var(--text-2)',
+                      fontWeight: selected ? 600 : 400
+                    }}
+                  >{nombre}</button>
+                )
+              })}
+              {(!miembros || miembros.length === 0) && (
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>No hay miembros en este workspace</span>
+              )}
+            </div>
+          </div>
         </div>
       </Modal>
 
@@ -301,7 +339,21 @@ Resumen ejecutivo:`
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
             {modalDetail?.fecha} · {modalDetail?.hora_inicio} – {modalDetail?.hora_fin} · {modalDetail?.tipo}
+            {modalDetail?.sucursal && ` · ${modalDetail.sucursal}`}
           </div>
+          {modalDetail?.invitados?.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {modalDetail.invitados.map(id => {
+                const m = (miembros || []).find(x => x.profile_id === id)
+                const nombre = m?.profiles?.nombre || m?.profiles?.email || id
+                return (
+                  <span key={id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--accent)18', color: 'var(--accent)', fontWeight: 500 }}>
+                    {nombre}
+                  </span>
+                )
+              })}
+            </div>
+          )}
           {modalDetail?.descripcion && (
             <p style={{ fontSize: 13, color: 'var(--text-2)' }}>{modalDetail.descripcion}</p>
           )}

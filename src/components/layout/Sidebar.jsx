@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { path: 'kpis',          icon: '📈', label: 'KPIs' },
   { path: 'objetivos',     icon: '🎯', label: 'Objetivos' },
   { path: 'reuniones',     icon: '🤝', label: 'Reuniones' },
-  { path: 'decisiones',    icon: '⚖️', label: 'Decisiones' },
   { path: 'problemas',     icon: '🔧', label: 'Problemas' },
   { path: 'ideas',         icon: '💡', label: 'Ideas' },
   { path: 'bitacora',      icon: '📚', label: 'Bitácora' },
