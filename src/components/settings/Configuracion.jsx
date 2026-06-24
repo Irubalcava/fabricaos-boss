@@ -26,7 +26,7 @@ export default function Configuracion() {
 
   const [tab, setTab] = useState('workspace')
   const [saving, setSaving] = useState(false)
-  const [wsForm, setWsForm] = useState({ nombre: '', giro: '', descripcion: '' })
+  const [wsForm, setWsForm] = useState({ nombre: '', giro: '', descripcion: '', color_primario: '' })
 
   // Miembros / Equipo
   const [inviteEmail, setInviteEmail] = useState('')
@@ -47,7 +47,7 @@ export default function Configuracion() {
 
   useEffect(() => {
     if (workspace) {
-      setWsForm({ nombre: workspace.nombre || '', giro: workspace.giro || '', descripcion: workspace.descripcion || '' })
+      setWsForm({ nombre: workspace.nombre || '', giro: workspace.giro || '', descripcion: workspace.descripcion || '', color_primario: workspace.color_primario || '' })
     }
   }, [workspace])
 
@@ -62,7 +62,7 @@ export default function Configuracion() {
     try {
       const { data, error } = await supabase
         .from('fabricas')
-        .update({ nombre: wsForm.nombre.trim(), giro: wsForm.giro, descripcion: wsForm.descripcion.trim() || null })
+        .update({ nombre: wsForm.nombre.trim(), giro: wsForm.giro, descripcion: wsForm.descripcion.trim() || null, color_primario: wsForm.color_primario || null })
         .eq('id', workspace.id).select().single()
       if (error) throw error
       setWorkspace(data)
@@ -254,6 +254,52 @@ export default function Configuracion() {
               <label className="label">Slug (URL)</label>
               <input className="input" value={workspace?.slug || ''} disabled style={{ opacity: 0.5 }} />
             </div>
+
+            {/* Color primario */}
+            <div className="form-group">
+              <label className="label">Color del workspace</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                {[
+                  { label: 'Cyan',    hex: '#00d4ff' },
+                  { label: 'Índigo',  hex: '#6366f1' },
+                  { label: 'Verde',   hex: '#10b981' },
+                  { label: 'Naranja', hex: '#f97316' },
+                  { label: 'Rosa',    hex: '#ec4899' },
+                  { label: 'Azul',    hex: '#3b82f6' },
+                  { label: 'Violeta', hex: '#8b5cf6' },
+                  { label: 'Rojo',    hex: '#ef4444' },
+                ].map(c => {
+                  const selected = wsForm.color_primario === c.hex
+                  return (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      title={c.label}
+                      disabled={!isAdmin?.()}
+                      onClick={() => {
+                        setWsForm(p => ({ ...p, color_primario: c.hex }))
+                        document.documentElement.style.setProperty('--accent', c.hex)
+                        const r = parseInt(c.hex.slice(1,3),16), g = parseInt(c.hex.slice(3,5),16), b = parseInt(c.hex.slice(5,7),16)
+                        document.documentElement.style.setProperty('--accent-fg', (0.299*r+0.587*g+0.114*b)/255 > 0.55 ? '#000' : '#fff')
+                      }}
+                      style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: c.hex,
+                        border: selected ? `3px solid var(--text-1)` : '3px solid transparent',
+                        outline: selected ? `2px solid ${c.hex}` : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        transform: selected ? 'scale(1.15)' : 'scale(1)',
+                      }}
+                    />
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
+                El color se aplica al instante y se guarda con el workspace.
+              </div>
+            </div>
+
             {isAdmin?.() && (
               <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={handleSaveWorkspace} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : 'Guardar cambios'}

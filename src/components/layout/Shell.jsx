@@ -53,6 +53,18 @@ export default function Shell() {
 
       setWorkspace(fab)
 
+      // Aplicar color primario del workspace como variable CSS
+      if (fab.color_primario) {
+        const c = fab.color_primario
+        document.documentElement.style.setProperty('--accent', c)
+        // Detectar si el color es claro u oscuro para el texto del botón
+        const r = parseInt(c.slice(1, 3), 16)
+        const g = parseInt(c.slice(3, 5), 16)
+        const b = parseInt(c.slice(5, 7), 16)
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        document.documentElement.style.setProperty('--accent-fg', lum > 0.55 ? '#000' : '#fff')
+      }
+
       const today = new Date().toISOString().split('T')[0]
 
       // 2) Todo en paralelo: membresía, miembros, sucursales, tareas vencidas, notifs
