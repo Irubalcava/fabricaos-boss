@@ -1,0 +1,46 @@
+{
+  "name": "Business OS",
+  "short_name": "BOS",
+  "description": "Centro de mando para tu negocio",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#00d4ff",
+  "orientation": "any",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Home",
+      "url": "/",
+      "description": "Ver el estado del negocio"
+    },
+    {
+      "name": "Mis Tareas",
+      "short_name": "Tareas",
+      "url": "/tareas",
+      "description": "Ver mis tareas del día"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}
