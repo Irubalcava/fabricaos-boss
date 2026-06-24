@@ -126,6 +126,11 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
   const [addingKr, setAddingKr] = useState(false)
   const [estado, setEstado] = useState(obj.estado)
 
+  // Tarea nueva inline
+  const [showNewTarea, setShowNewTarea] = useState(false)
+  const [newTarea, setNewTarea] = useState({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '' })
+  const [savingTarea, setSavingTarea] = useState(false)
+
   // Plan manual
   const [modoManual, setModoManual] = useState(false)
   const [planManualTexto, setPlanManualTexto] = useState(obj.plan_ia?.texto || '')
@@ -228,6 +233,35 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       setPlanIADetalle(plan)
     } catch { toast.error('No se pudo generar el plan IA') }
     finally { setGenerandoPlanDetalle(false) }
+  }
+
+  async function handleAddTarea() {
+    if (!newTarea.titulo.trim()) { toast.error('El título es requerido'); return }
+    setSavingTarea(true)
+    const payload = {
+      fabrica_id: workspace.id,
+      objetivo_id: obj.id,
+      titulo: newTarea.titulo.trim(),
+      prioridad: newTarea.prioridad,
+      estado: 'pendiente',
+      fecha_limite: newTarea.fecha_limite || null,
+      responsable_id: newTarea.responsable_id || null,
+      created_by: miembro?.profile_id,
+    }
+    const { data, error } = await supabase.from('bos_tareas').insert(payload).select().single()
+    setSavingTarea(false)
+    if (error) { toast.error(error.message); return }
+    setTareas(prev => [data, ...prev])
+    setNewTarea({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '' })
+    setShowNewTarea(false)
+    toast.success('Tarea creada')
+    onReload()
+  }
+
+  async function handleDeleteTarea(id) {
+    await supabase.from('bos_tareas').delete().eq('id', id)
+    setTareas(prev => prev.filter(t => t.id !== id))
+    onReload()
   }
 
   async function handleAceptarPlanIA() {
@@ -443,21 +477,74 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       {/* ── TAB: TAREAS ── */}
       {!loadingTab && tab === 'tareas' && (
         <div>
-          {tareas.length === 0 ? (
+          {/* Encabezado con botón nueva tarea */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {['pendiente', 'en_progreso', 'bloqueada', 'hecha'].map(e => {
+                const cnt = tareas.filter(t => t.estado === e).length
+                if (!cnt) return null
+                return <span key={e} style={{ fontSize: 11, fontWeight: 600, color: ESTADO_TAREAS_COLORS[e], background: ESTADO_TAREAS_COLORS[e] + '18', padding: '2px 10px', borderRadius: 10 }}>{cnt} {ESTADO_TAREAS_LABELS[e]}</span>
+              })}
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowNewTarea(v => !v)}>
+              {showNewTarea ? '✕ Cancelar' : '+ Nueva tarea'}
+            </button>
+          </div>
+
+          {/* Formulario inline nueva tarea */}
+          {showNewTarea && (
+            <div style={{ padding: '14px 16px', background: 'var(--bg-input)', border: '1px dashed var(--accent)60', borderRadius: 10, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>Nueva tarea vinculada al objetivo</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  className="input" autoFocus
+                  placeholder="Título de la tarea (requerido)"
+                  value={newTarea.titulo}
+                  onChange={e => setNewTarea(p => ({ ...p, titulo: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTarea()}
+                  style={{ fontSize: 13 }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <select className="input" value={newTarea.prioridad} onChange={e => setNewTarea(p => ({ ...p, prioridad: e.target.value }))} style={{ fontSize: 12 }}>
+                    <option value="baja">Prioridad: Baja</option>
+                    <option value="media">Prioridad: Media</option>
+                    <option value="alta">Prioridad: Alta</option>
+                    <option value="urgente">Prioridad: Urgente</option>
+                  </select>
+                  <input
+                    className="input" type="date"
+                    value={newTarea.fecha_limite}
+                    onChange={e => setNewTarea(p => ({ ...p, fecha_limite: e.target.value }))}
+                    style={{ fontSize: 12 }}
+                  />
+                  <select className="input" value={newTarea.responsable_id} onChange={e => setNewTarea(p => ({ ...p, responsable_id: e.target.value }))} style={{ fontSize: 12 }}>
+                    <option value="">Sin asignar</option>
+                    {miembros.map(m => (
+                      <option key={m.profile_id} value={m.profile_id}>
+                        {m.profiles?.nombre || m.nombre || m.profile_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setShowNewTarea(false); setNewTarea({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '' }) }}>Cancelar</button>
+                  <button className="btn btn-primary btn-sm" onClick={handleAddTarea} disabled={savingTarea}>
+                    {savingTarea ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> : '✓ Crear tarea'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de tareas */}
+          {tareas.length === 0 && !showNewTarea ? (
             <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-3)' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
               <div style={{ fontSize: 14 }}>No hay tareas vinculadas a este objetivo</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>En el módulo de Tareas, selecciona este objetivo al crear una tarea</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Pulsa "+ Nueva tarea" para agregar la primera</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                {['pendiente', 'en_progreso', 'bloqueada', 'hecha'].map(e => {
-                  const cnt = tareas.filter(t => t.estado === e).length
-                  if (!cnt) return null
-                  return <span key={e} style={{ fontSize: 11, fontWeight: 600, color: ESTADO_TAREAS_COLORS[e], background: ESTADO_TAREAS_COLORS[e] + '18', padding: '2px 10px', borderRadius: 10 }}>{cnt} {ESTADO_TAREAS_LABELS[e]}</span>
-                })}
-              </div>
               {tareas.map(t => (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--bg-card)', border: `1px solid var(--border)`, borderLeft: `4px solid ${ESTADO_TAREAS_COLORS[t.estado] || 'var(--border)'}`, borderRadius: 8 }}>
                   <select value={t.estado} onChange={e => handleTareaEstado(t.id, e.target.value)}
@@ -466,9 +553,14 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                   </select>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: t.estado === 'hecha' ? 'var(--text-3)' : 'var(--text-1)', textDecoration: t.estado === 'hecha' ? 'line-through' : 'none' }} className="truncate">{t.titulo}</div>
-                    {t.fecha_limite && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>📅 {t.fecha_limite}</div>}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+                      {t.fecha_limite && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>📅 {t.fecha_limite}</span>}
+                      {t.responsable_id && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>👤 {getNombre(t.responsable_id)?.split(' ')[0]}</span>}
+                    </div>
                   </div>
-                  {t.prioridad && <span style={{ fontSize: 10, fontWeight: 700, color: t.prioridad === 'alta' || t.prioridad === 'critica' ? 'var(--danger)' : 'var(--text-3)', textTransform: 'uppercase', flexShrink: 0 }}>{t.prioridad}</span>}
+                  {t.prioridad && <span style={{ fontSize: 10, fontWeight: 700, color: t.prioridad === 'urgente' ? 'var(--danger)' : t.prioridad === 'alta' ? '#f97316' : 'var(--text-3)', textTransform: 'uppercase', flexShrink: 0 }}>{t.prioridad}</span>}
+                  <button onClick={() => handleDeleteTarea(t.id)} style={{ background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontSize: 14, padding: '2px 4px', opacity: 0.5, flexShrink: 0 }} title="Eliminar tarea"
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>✕</button>
                 </div>
               ))}
             </div>
