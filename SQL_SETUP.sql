@@ -1,30 +1,47 @@
 -- ============================================================
--- Business OS — SQL_SETUP.sql
--- Ejecutar en Supabase > SQL Editor
+-- Business OS — SQL_SETUP.sql  (versión idempotente)
+-- Ejecutar en Supabase > SQL Editor > Run
 -- ============================================================
 
 -- -----------------------------------------------
--- 1. EXTENSIONES
+-- 0. EXTENSIONES
 -- -----------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- -----------------------------------------------
--- 2. TABLAS PRINCIPALES DEL SISTEMA (ya existen en fabricaos)
+-- 1. COLUMNAS EXTRA EN TABLAS EXISTENTES
 -- -----------------------------------------------
--- "fabricas" y "colaboradores" ya existen en el schema principal.
--- Business OS usa las columnas adicionales:
---   colaboradores.boss_rol  TEXT  ('owner','admin','miembro','viewer')
---   colaboradores.activo    BOOLEAN
+-- fabricas: slug para routing, giro para categoría
+ALTER TABLE fabricas
+  ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE,
+  ADD COLUMN IF NOT EXISTS giro TEXT;
 
--- Agregar columnas si no existen
+-- colaboradores: boss_rol y activo para Business OS
 ALTER TABLE colaboradores
   ADD COLUMN IF NOT EXISTS boss_rol TEXT CHECK (boss_rol IN ('owner','admin','miembro','viewer')),
   ADD COLUMN IF NOT EXISTS activo   BOOLEAN DEFAULT TRUE;
 
 -- -----------------------------------------------
+-- 2. DROP TABLAS bos_* (orden inverso por FK)
+-- -----------------------------------------------
+DROP TABLE IF EXISTS bos_notificaciones     CASCADE;
+DROP TABLE IF EXISTS bos_bitacora           CASCADE;
+DROP TABLE IF EXISTS bos_votos_decision     CASCADE;
+DROP TABLE IF EXISTS bos_decisiones         CASCADE;
+DROP TABLE IF EXISTS bos_acuerdos_reunion   CASCADE;
+DROP TABLE IF EXISTS bos_reuniones          CASCADE;
+DROP TABLE IF EXISTS bos_key_results        CASCADE;
+DROP TABLE IF EXISTS bos_objetivos          CASCADE;
+DROP TABLE IF EXISTS bos_kpi_mediciones     CASCADE;
+DROP TABLE IF EXISTS bos_kpis               CASCADE;
+DROP TABLE IF EXISTS bos_ideas              CASCADE;
+DROP TABLE IF EXISTS bos_problemas          CASCADE;
+DROP TABLE IF EXISTS bos_tareas             CASCADE;
+
+-- -----------------------------------------------
 -- 3. TAREAS
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_tareas (
+CREATE TABLE bos_tareas (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id   UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo       TEXT NOT NULL,
@@ -40,15 +57,15 @@ CREATE TABLE IF NOT EXISTS bos_tareas (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_tareas_fabrica   ON bos_tareas(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_tareas_estado    ON bos_tareas(estado);
-CREATE INDEX IF NOT EXISTS idx_bos_tareas_asignado  ON bos_tareas(asignado_a);
-CREATE INDEX IF NOT EXISTS idx_bos_tareas_limite    ON bos_tareas(fecha_limite);
+CREATE INDEX idx_bos_tareas_fabrica  ON bos_tareas(fabrica_id);
+CREATE INDEX idx_bos_tareas_estado   ON bos_tareas(estado);
+CREATE INDEX idx_bos_tareas_asignado ON bos_tareas(asignado_a);
+CREATE INDEX idx_bos_tareas_limite   ON bos_tareas(fecha_limite);
 
 -- -----------------------------------------------
 -- 4. KPIs
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_kpis (
+CREATE TABLE bos_kpis (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   nombre      TEXT NOT NULL,
@@ -64,10 +81,9 @@ CREATE TABLE IF NOT EXISTS bos_kpis (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_kpis_fabrica ON bos_kpis(fabrica_id);
+CREATE INDEX idx_bos_kpis_fabrica ON bos_kpis(fabrica_id);
 
--- Mediciones de KPI
-CREATE TABLE IF NOT EXISTS bos_kpi_mediciones (
+CREATE TABLE bos_kpi_mediciones (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   kpi_id     UUID NOT NULL REFERENCES bos_kpis(id) ON DELETE CASCADE,
   fabrica_id UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
@@ -78,13 +94,13 @@ CREATE TABLE IF NOT EXISTS bos_kpi_mediciones (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_kpi_med_kpi    ON bos_kpi_mediciones(kpi_id);
-CREATE INDEX IF NOT EXISTS idx_bos_kpi_med_fecha  ON bos_kpi_mediciones(fecha);
+CREATE INDEX idx_bos_kpi_med_kpi   ON bos_kpi_mediciones(kpi_id);
+CREATE INDEX idx_bos_kpi_med_fecha ON bos_kpi_mediciones(fecha);
 
 -- -----------------------------------------------
 -- 5. OBJETIVOS (OKR)
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_objetivos (
+CREATE TABLE bos_objetivos (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id   UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo       TEXT NOT NULL,
@@ -100,25 +116,24 @@ CREATE TABLE IF NOT EXISTS bos_objetivos (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_objetivos_fabrica ON bos_objetivos(fabrica_id);
+CREATE INDEX idx_bos_objetivos_fabrica ON bos_objetivos(fabrica_id);
 
--- Key Results
-CREATE TABLE IF NOT EXISTS bos_key_results (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  objetivo_id  UUID NOT NULL REFERENCES bos_objetivos(id) ON DELETE CASCADE,
-  fabrica_id   UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
-  descripcion  TEXT NOT NULL,
-  meta         NUMERIC,
-  progreso     NUMERIC NOT NULL DEFAULT 0,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE bos_key_results (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  objetivo_id UUID NOT NULL REFERENCES bos_objetivos(id) ON DELETE CASCADE,
+  fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
+  descripcion TEXT NOT NULL,
+  meta        NUMERIC,
+  progreso    NUMERIC NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_kr_objetivo ON bos_key_results(objetivo_id);
+CREATE INDEX idx_bos_kr_objetivo ON bos_key_results(objetivo_id);
 
 -- -----------------------------------------------
 -- 6. REUNIONES
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_reuniones (
+CREATE TABLE bos_reuniones (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo      TEXT NOT NULL,
@@ -134,11 +149,10 @@ CREATE TABLE IF NOT EXISTS bos_reuniones (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_reuniones_fabrica ON bos_reuniones(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_reuniones_fecha   ON bos_reuniones(fecha);
+CREATE INDEX idx_bos_reuniones_fabrica ON bos_reuniones(fabrica_id);
+CREATE INDEX idx_bos_reuniones_fecha   ON bos_reuniones(fecha);
 
--- Acuerdos de reunión
-CREATE TABLE IF NOT EXISTS bos_acuerdos_reunion (
+CREATE TABLE bos_acuerdos_reunion (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   reunion_id  UUID NOT NULL REFERENCES bos_reuniones(id) ON DELETE CASCADE,
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
@@ -148,12 +162,12 @@ CREATE TABLE IF NOT EXISTS bos_acuerdos_reunion (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_acuerdos_reunion ON bos_acuerdos_reunion(reunion_id);
+CREATE INDEX idx_bos_acuerdos_reunion ON bos_acuerdos_reunion(reunion_id);
 
 -- -----------------------------------------------
 -- 7. DECISIONES
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_decisiones (
+CREATE TABLE bos_decisiones (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id   UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo       TEXT NOT NULL,
@@ -167,10 +181,9 @@ CREATE TABLE IF NOT EXISTS bos_decisiones (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_decisiones_fabrica ON bos_decisiones(fabrica_id);
+CREATE INDEX idx_bos_decisiones_fabrica ON bos_decisiones(fabrica_id);
 
--- Votos
-CREATE TABLE IF NOT EXISTS bos_votos_decision (
+CREATE TABLE bos_votos_decision (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   decision_id UUID NOT NULL REFERENCES bos_decisiones(id) ON DELETE CASCADE,
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
@@ -181,12 +194,12 @@ CREATE TABLE IF NOT EXISTS bos_votos_decision (
   UNIQUE (decision_id, votante_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_votos_decision ON bos_votos_decision(decision_id);
+CREATE INDEX idx_bos_votos_decision ON bos_votos_decision(decision_id);
 
 -- -----------------------------------------------
 -- 8. PROBLEMAS
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_problemas (
+CREATE TABLE bos_problemas (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo      TEXT NOT NULL,
@@ -202,13 +215,13 @@ CREATE TABLE IF NOT EXISTS bos_problemas (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_problemas_fabrica ON bos_problemas(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_problemas_estado  ON bos_problemas(estado);
+CREATE INDEX idx_bos_problemas_fabrica ON bos_problemas(fabrica_id);
+CREATE INDEX idx_bos_problemas_estado  ON bos_problemas(estado);
 
 -- -----------------------------------------------
 -- 9. IDEAS
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_ideas (
+CREATE TABLE bos_ideas (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id        UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   titulo            TEXT NOT NULL,
@@ -226,13 +239,13 @@ CREATE TABLE IF NOT EXISTS bos_ideas (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_ideas_fabrica ON bos_ideas(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_ideas_estado  ON bos_ideas(estado);
+CREATE INDEX idx_bos_ideas_fabrica ON bos_ideas(fabrica_id);
+CREATE INDEX idx_bos_ideas_estado  ON bos_ideas(estado);
 
 -- -----------------------------------------------
 -- 10. BITÁCORA
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_bitacora (
+CREATE TABLE bos_bitacora (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   fabrica_id  UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   tipo        TEXT NOT NULL DEFAULT 'general'
@@ -244,32 +257,31 @@ CREATE TABLE IF NOT EXISTS bos_bitacora (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_bitacora_fabrica    ON bos_bitacora(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_bitacora_created_at ON bos_bitacora(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_bos_bitacora_tipo       ON bos_bitacora(tipo);
+CREATE INDEX idx_bos_bitacora_fabrica    ON bos_bitacora(fabrica_id);
+CREATE INDEX idx_bos_bitacora_created_at ON bos_bitacora(created_at DESC);
+CREATE INDEX idx_bos_bitacora_tipo       ON bos_bitacora(tipo);
 
 -- -----------------------------------------------
 -- 11. NOTIFICACIONES
 -- -----------------------------------------------
-CREATE TABLE IF NOT EXISTS bos_notificaciones (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  fabrica_id     UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
+CREATE TABLE bos_notificaciones (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fabrica_id      UUID NOT NULL REFERENCES fabricas(id) ON DELETE CASCADE,
   destinatario_id UUID NOT NULL REFERENCES auth.users(id),
-  tipo           TEXT NOT NULL DEFAULT 'info',
-  titulo         TEXT NOT NULL,
-  cuerpo         TEXT,
-  leida          BOOLEAN DEFAULT FALSE,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  tipo            TEXT NOT NULL DEFAULT 'info',
+  titulo          TEXT NOT NULL,
+  cuerpo          TEXT,
+  leida           BOOLEAN DEFAULT FALSE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bos_notif_dest   ON bos_notificaciones(destinatario_id);
-CREATE INDEX IF NOT EXISTS idx_bos_notif_fabrica ON bos_notificaciones(fabrica_id);
-CREATE INDEX IF NOT EXISTS idx_bos_notif_leida  ON bos_notificaciones(leida);
+CREATE INDEX idx_bos_notif_dest    ON bos_notificaciones(destinatario_id);
+CREATE INDEX idx_bos_notif_fabrica ON bos_notificaciones(fabrica_id);
+CREATE INDEX idx_bos_notif_leida   ON bos_notificaciones(leida);
 
 -- -----------------------------------------------
--- 12. PROFILES (vista/tabla auxiliar)
+-- 12. PROFILES
 -- -----------------------------------------------
--- Si no existe tabla profiles con email expuesto
 CREATE TABLE IF NOT EXISTS profiles (
   id         UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email      TEXT UNIQUE,
@@ -278,7 +290,6 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Trigger para auto-crear profile al registrar usuario
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -294,16 +305,13 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- Sincronizar usuarios existentes (si los hay)
 INSERT INTO profiles (id, email)
 SELECT id, email FROM auth.users
 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
 
 -- -----------------------------------------------
--- 13. ROW LEVEL SECURITY
+-- 13. FUNCIONES HELPER RLS
 -- -----------------------------------------------
-
--- Helper function: verificar membresía activa con boss_rol
 CREATE OR REPLACE FUNCTION is_boss_member(p_fabrica_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT EXISTS (
@@ -315,7 +323,6 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER AS $$
   );
 $$;
 
--- Helper function: verificar rol admin/owner
 CREATE OR REPLACE FUNCTION is_boss_admin(p_fabrica_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT EXISTS (
@@ -327,100 +334,108 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER AS $$
   );
 $$;
 
--- Habilitar RLS en todas las tablas bos_*
-ALTER TABLE bos_tareas          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_kpis            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_kpi_mediciones  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_objetivos       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_key_results     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_reuniones       ENABLE ROW LEVEL SECURITY;
+-- -----------------------------------------------
+-- 14. ROW LEVEL SECURITY
+-- -----------------------------------------------
+ALTER TABLE bos_tareas           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_kpis             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_kpi_mediciones   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_objetivos        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_key_results      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_reuniones        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bos_acuerdos_reunion ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_decisiones      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_votos_decision  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_problemas       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_ideas           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_bitacora        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bos_notificaciones  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE profiles            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_decisiones       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_votos_decision   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_problemas        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_ideas            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_bitacora         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bos_notificaciones   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles             ENABLE ROW LEVEL SECURITY;
 
--- TAREAS
-CREATE POLICY IF NOT EXISTS "boss_tareas_select" ON bos_tareas FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_tareas_insert" ON bos_tareas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_tareas_update" ON bos_tareas FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_tareas_delete" ON bos_tareas FOR DELETE USING (is_boss_admin(fabrica_id));
+-- TAREAS (tablas recién creadas, sin policies previas)
+CREATE POLICY "boss_tareas_select" ON bos_tareas FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_tareas_insert" ON bos_tareas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_tareas_update" ON bos_tareas FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_tareas_delete" ON bos_tareas FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- KPIs
-CREATE POLICY IF NOT EXISTS "boss_kpis_select" ON bos_kpis FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kpis_insert" ON bos_kpis FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kpis_update" ON bos_kpis FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kpis_delete" ON bos_kpis FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_kpis_select" ON bos_kpis FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kpis_insert" ON bos_kpis FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kpis_update" ON bos_kpis FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kpis_delete" ON bos_kpis FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- KPI MEDICIONES
-CREATE POLICY IF NOT EXISTS "boss_kpi_med_select" ON bos_kpi_mediciones FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kpi_med_insert" ON bos_kpi_mediciones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kpi_med_delete" ON bos_kpi_mediciones FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_kpi_med_select" ON bos_kpi_mediciones FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kpi_med_insert" ON bos_kpi_mediciones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kpi_med_delete" ON bos_kpi_mediciones FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- OBJETIVOS
-CREATE POLICY IF NOT EXISTS "boss_obj_select" ON bos_objetivos FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_obj_insert" ON bos_objetivos FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_obj_update" ON bos_objetivos FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_obj_delete" ON bos_objetivos FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_obj_select" ON bos_objetivos FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_obj_insert" ON bos_objetivos FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_obj_update" ON bos_objetivos FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_obj_delete" ON bos_objetivos FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- KEY RESULTS
-CREATE POLICY IF NOT EXISTS "boss_kr_select" ON bos_key_results FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kr_insert" ON bos_key_results FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kr_update" ON bos_key_results FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_kr_delete" ON bos_key_results FOR DELETE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kr_select" ON bos_key_results FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kr_insert" ON bos_key_results FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kr_update" ON bos_key_results FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_kr_delete" ON bos_key_results FOR DELETE USING (is_boss_member(fabrica_id));
 
 -- REUNIONES
-CREATE POLICY IF NOT EXISTS "boss_reu_select" ON bos_reuniones FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_reu_insert" ON bos_reuniones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_reu_update" ON bos_reuniones FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_reu_delete" ON bos_reuniones FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_reu_select" ON bos_reuniones FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_reu_insert" ON bos_reuniones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_reu_update" ON bos_reuniones FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_reu_delete" ON bos_reuniones FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- ACUERDOS REUNION
-CREATE POLICY IF NOT EXISTS "boss_acu_select" ON bos_acuerdos_reunion FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_acu_insert" ON bos_acuerdos_reunion FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_acu_delete" ON bos_acuerdos_reunion FOR DELETE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_acu_select" ON bos_acuerdos_reunion FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_acu_insert" ON bos_acuerdos_reunion FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_acu_delete" ON bos_acuerdos_reunion FOR DELETE USING (is_boss_member(fabrica_id));
 
 -- DECISIONES
-CREATE POLICY IF NOT EXISTS "boss_dec_select" ON bos_decisiones FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_dec_insert" ON bos_decisiones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_dec_update" ON bos_decisiones FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_dec_delete" ON bos_decisiones FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_dec_select" ON bos_decisiones FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_dec_insert" ON bos_decisiones FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_dec_update" ON bos_decisiones FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_dec_delete" ON bos_decisiones FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- VOTOS
-CREATE POLICY IF NOT EXISTS "boss_voto_select" ON bos_votos_decision FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_voto_insert" ON bos_votos_decision FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_voto_update" ON bos_votos_decision FOR UPDATE USING (votante_id = auth.uid());
+CREATE POLICY "boss_voto_select" ON bos_votos_decision FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_voto_insert" ON bos_votos_decision FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_voto_update" ON bos_votos_decision FOR UPDATE USING (votante_id = auth.uid());
 
 -- PROBLEMAS
-CREATE POLICY IF NOT EXISTS "boss_prob_select" ON bos_problemas FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_prob_insert" ON bos_problemas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_prob_update" ON bos_problemas FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_prob_delete" ON bos_problemas FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_prob_select" ON bos_problemas FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_prob_insert" ON bos_problemas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_prob_update" ON bos_problemas FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_prob_delete" ON bos_problemas FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- IDEAS
-CREATE POLICY IF NOT EXISTS "boss_idea_select" ON bos_ideas FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_idea_insert" ON bos_ideas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_idea_update" ON bos_ideas FOR UPDATE USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_idea_delete" ON bos_ideas FOR DELETE USING (is_boss_admin(fabrica_id));
+CREATE POLICY "boss_idea_select" ON bos_ideas FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_idea_insert" ON bos_ideas FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_idea_update" ON bos_ideas FOR UPDATE USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_idea_delete" ON bos_ideas FOR DELETE USING (is_boss_admin(fabrica_id));
 
 -- BITÁCORA
-CREATE POLICY IF NOT EXISTS "boss_bit_select" ON bos_bitacora FOR SELECT USING (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_bit_insert" ON bos_bitacora FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
-CREATE POLICY IF NOT EXISTS "boss_bit_delete" ON bos_bitacora FOR DELETE USING (is_boss_admin(fabrica_id) AND NOT automatico);
+CREATE POLICY "boss_bit_select" ON bos_bitacora FOR SELECT USING (is_boss_member(fabrica_id));
+CREATE POLICY "boss_bit_insert" ON bos_bitacora FOR INSERT WITH CHECK (is_boss_member(fabrica_id));
+CREATE POLICY "boss_bit_delete" ON bos_bitacora FOR DELETE USING (is_boss_admin(fabrica_id) AND NOT automatico);
 
 -- NOTIFICACIONES
-CREATE POLICY IF NOT EXISTS "boss_notif_select" ON bos_notificaciones FOR SELECT USING (destinatario_id = auth.uid());
-CREATE POLICY IF NOT EXISTS "boss_notif_update" ON bos_notificaciones FOR UPDATE USING (destinatario_id = auth.uid());
+CREATE POLICY "boss_notif_select" ON bos_notificaciones FOR SELECT USING (destinatario_id = auth.uid());
+CREATE POLICY "boss_notif_update" ON bos_notificaciones FOR UPDATE USING (destinatario_id = auth.uid());
 
--- PROFILES
-CREATE POLICY IF NOT EXISTS "profiles_select" ON profiles FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY IF NOT EXISTS "profiles_update" ON profiles FOR UPDATE USING (id = auth.uid());
+-- PROFILES (puede ya existir, usamos DO para no duplicar)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'profiles_select') THEN
+    CREATE POLICY "profiles_select" ON profiles FOR SELECT TO authenticated USING (TRUE);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'profiles_update') THEN
+    CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (id = auth.uid());
+  END IF;
+END $$;
 
 -- -----------------------------------------------
--- 14. UPDATED_AT TRIGGER (para bos_tareas)
+-- 15. TRIGGER updated_at PARA bos_tareas
 -- -----------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -435,6 +450,6 @@ CREATE TRIGGER bos_tareas_updated_at
   BEFORE UPDATE ON bos_tareas
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- -----------------------------------------------
+-- ============================================================
 -- FIN — Business OS SQL Setup
--- -----------------------------------------------
+-- ============================================================
