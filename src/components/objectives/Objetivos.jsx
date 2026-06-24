@@ -128,7 +128,7 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
 
   // Tarea nueva inline
   const [showNewTarea, setShowNewTarea] = useState(false)
-  const [newTarea, setNewTarea] = useState({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '' })
+  const [newTarea, setNewTarea] = useState({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '', area: '' })
   const [savingTarea, setSavingTarea] = useState(false)
 
   // Plan manual
@@ -246,13 +246,14 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
       estado: 'pendiente',
       fecha_limite: newTarea.fecha_limite || null,
       responsable_id: newTarea.responsable_id || null,
+      area: newTarea.area || null,
       created_by: miembro?.profile_id,
     }
     const { data, error } = await supabase.from('bos_tareas').insert(payload).select().single()
     setSavingTarea(false)
     if (error) { toast.error(error.message); return }
     setTareas(prev => [data, ...prev])
-    setNewTarea({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '' })
+    setNewTarea({ titulo: '', prioridad: 'media', fecha_limite: '', responsable_id: '', area: '' })
     setShowNewTarea(false)
     toast.success('Tarea creada')
     onReload()
@@ -504,13 +505,19 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                   onKeyDown={e => e.key === 'Enter' && handleAddTarea()}
                   style={{ fontSize: 13 }}
                 />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <select className="input" value={newTarea.prioridad} onChange={e => setNewTarea(p => ({ ...p, prioridad: e.target.value }))} style={{ fontSize: 12 }}>
                     <option value="baja">Prioridad: Baja</option>
                     <option value="media">Prioridad: Media</option>
                     <option value="alta">Prioridad: Alta</option>
                     <option value="urgente">Prioridad: Urgente</option>
                   </select>
+                  <select className="input" value={newTarea.area} onChange={e => setNewTarea(p => ({ ...p, area: e.target.value }))} style={{ fontSize: 12 }}>
+                    <option value="">Área (opcional)</option>
+                    {AREAS_NEGOCIO.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <input
                     className="input" type="date"
                     value={newTarea.fecha_limite}
@@ -554,6 +561,7 @@ function ObjetivoDetalle({ obj, onClose, onEditar, workspace, miembro, miembros,
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: t.estado === 'hecha' ? 'var(--text-3)' : 'var(--text-1)', textDecoration: t.estado === 'hecha' ? 'line-through' : 'none' }} className="truncate">{t.titulo}</div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+                      {t.area && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent)12', padding: '1px 7px', borderRadius: 8 }}>{t.area}</span>}
                       {t.fecha_limite && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>📅 {t.fecha_limite}</span>}
                       {t.responsable_id && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>👤 {getNombre(t.responsable_id)?.split(' ')[0]}</span>}
                     </div>
