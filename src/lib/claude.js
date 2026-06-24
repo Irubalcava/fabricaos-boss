@@ -3,7 +3,7 @@
 
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
-export async function generateSummary(prompt) {
+export async function generateSummary(prompt, maxTokens = 1024) {
   if (!ANTHROPIC_API_KEY) {
     return 'Configura VITE_ANTHROPIC_API_KEY para habilitar resúmenes con IA.'
   }
@@ -18,7 +18,7 @@ export async function generateSummary(prompt) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }]
     })
   })
@@ -30,6 +30,49 @@ export async function generateSummary(prompt) {
 
   const data = await res.json()
   return data.content?.[0]?.text ?? ''
+}
+
+export async function generarPlanObjetivo({ titulo, descripcion, area, tipo, periodicidad, fecha_inicio, fecha_fin }) {
+  const prompt = `Eres un consultor de negocios experto. Tu cliente tiene este objetivo empresarial:
+
+Título: "${titulo}"
+Descripción: "${descripcion || 'No especificada'}"
+Área del negocio: "${area || 'General'}"
+Tipo: "${tipo || 'Crecer'}"
+Periodicidad de seguimiento: "${periodicidad}"
+Periodo: del ${fecha_inicio || 'inicio inmediato'} al ${fecha_fin || 'sin fecha límite definida'}
+
+Genera un plan de acción práctico y específico para este contexto. Responde ÚNICAMENTE con un JSON válido con esta estructura:
+{
+  "tareas": [
+    { "titulo": "string (máx 70 caracteres)", "descripcion": "string (máx 130 caracteres, qué hacer exactamente)", "duracion": "string (ej: 2 días, 1 semana)", "area": "string (área responsable)" }
+  ],
+  "metricas": [
+    { "nombre": "string", "frecuencia": "semanal|mensual", "meta": number, "unidad": "string (ej: pesos, clientes, %)", "descripcion": "string (cómo medirlo)" }
+  ],
+  "presupuesto": [
+    { "categoria": "string", "monto": number, "justificacion": "string (por qué este gasto)" }
+  ],
+  "responsables": [
+    { "area": "string", "rol": "lidera|apoya|informa", "descripcion": "string (qué hace exactamente)" }
+  ]
+}
+
+Reglas:
+- tareas: 5 a 8, ordenadas cronológicamente, concretas y accionables en el contexto del área
+- metricas: 3 a 5, las más relevantes para saber si el objetivo va bien o mal
+- presupuesto: 3 a 6 categorías, montos en pesos mexicanos, realistas para una PyME
+- responsables: 2 a 4 áreas del negocio con roles claros
+
+Sin texto adicional. Solo el JSON.`
+
+  const raw = await generateSummary(prompt, 2048)
+  try {
+    const match = raw.match(/\{[\s\S]*\}/s)
+    return match ? JSON.parse(match[0]) : null
+  } catch {
+    return null
+  }
 }
 
 export async function suggestCausas(titulo) {
