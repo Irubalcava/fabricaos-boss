@@ -1,8 +1,20 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../../store/index.js'
 import { supabase } from '../../lib/supabase.js'
 import { toast } from '../ui/Toast.jsx'
+
+function useTheme() {
+  const [theme, setTheme] = useState(() => localStorage.getItem('boss-theme') || 'dark')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('boss-theme', theme)
+  }, [theme])
+
+  const toggle = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
+  return { theme, toggle }
+}
 
 export default function Header({ onToggleSidebar, onQuickAction }) {
   const { slug } = useParams()
@@ -10,6 +22,7 @@ export default function Header({ onToggleSidebar, onQuickAction }) {
   const { workspace, user, notificacionesNoLeidas, miembro } = useStore()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotif, setShowNotif] = useState(false)
+  const { theme, toggle: toggleTheme } = useTheme()
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -98,6 +111,25 @@ export default function Header({ onToggleSidebar, onQuickAction }) {
         ))}
       </div>
 
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-2)',
+          borderRadius: 6,
+          padding: '5px 8px',
+          fontSize: 15,
+          cursor: 'pointer',
+          color: 'var(--text-2)',
+          transition: 'all 0.15s',
+          lineHeight: 1
+        }}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+
       {/* Notificaciones */}
       <button
         onClick={() => setShowNotif(v => !v)}
@@ -142,7 +174,7 @@ export default function Header({ onToggleSidebar, onQuickAction }) {
             border: '1px solid var(--border-2)',
             borderRadius: 8,
             minWidth: 200,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
             zIndex: 200,
             overflow: 'hidden'
           }}>
@@ -152,6 +184,20 @@ export default function Header({ onToggleSidebar, onQuickAction }) {
                 {rolLabel[miembro?.boss_rol] || 'Colaborador'}
               </div>
             </div>
+            <button
+              onClick={toggleTheme}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', textAlign: 'left',
+                padding: '10px 16px', background: 'none', border: 'none',
+                color: 'var(--text-2)', fontSize: 13, cursor: 'pointer'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--border)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+            </button>
             <button
               onClick={() => { navigate(`/${slug}/configuracion`); setShowUserMenu(false) }}
               style={{
