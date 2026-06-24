@@ -51,6 +51,12 @@ export default function Shell() {
         return
       }
 
+      if (!fab.boss_is_active) {
+        toast.error('Business OS no está activo para este workspace. Contacta a soporte.')
+        navigate('/select')
+        return
+      }
+
       setWorkspace(fab)
 
       // Aplicar color primario del workspace como variable CSS
