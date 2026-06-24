@@ -14,38 +14,46 @@ const ICONS = {
   decision: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="3"/><path d="M7.05 4.05L5.636 5.464"/><line x1="1" y1="9" x2="3" y2="9"/><path d="M16.95 4.05L18.364 5.464"/><line x1="21" y1="9" x2="23" y2="9"/><path d="M4.22 15H2a10 10 0 0120 0h-2.22"/><path d="M12 15v7"/></svg>,
   workspace:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>,
   general:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  alerta:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
 }
 
 function IconBadge({ type, color, size = 36 }) {
   return (
-    <div style={{
-      width: size, height: size, borderRadius: size * 0.28,
-      background: color + '18',
-      border: `1px solid ${color}30`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color, flexShrink: 0
-    }}>
+    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: color + '18', border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
       {ICONS[type] || ICONS.general}
     </div>
   )
 }
 
 const MODULOS = [
-  { key: 'tareas',    label: 'Tareas',     desc: 'Organiza y asigna tareas a tu equipo',       color: '#00d4ff', type: 'tarea',    path: 'tareas'    },
-  { key: 'kpis',     label: 'KPIs',        desc: 'Mide el desempeño con indicadores clave',     color: '#10b981', type: 'kpi',      path: 'kpis'      },
-  { key: 'objetivos',label: 'Objetivos',   desc: 'Define metas y haz seguimiento de avance',    color: '#6366f1', type: 'objetivo', path: 'objetivos' },
-  { key: 'problemas',label: 'Problemas',   desc: 'Registra y resuelve obstáculos del negocio',  color: '#ef4444', type: 'problema', path: 'problemas' },
-  { key: 'ideas',    label: 'Ideas',       desc: 'Captura y evalúa ideas de mejora',            color: '#f59e0b', type: 'idea',     path: 'ideas'     },
-  { key: 'reuniones',label: 'Reuniones',   desc: 'Agenda juntas y registra acuerdos',           color: '#00d4ff', type: 'reunion',  path: 'reuniones' },
-  { key: 'decisiones',label:'Decisiones',  desc: 'Vota y documenta decisiones importantes',     color: '#6366f1', type: 'decision', path: 'decisiones'},
+  { key: 'tareas',    label: 'Tareas',      desc: 'Organiza y asigna tareas a tu equipo',      color: '#00d4ff', type: 'tarea',    path: 'tareas'    },
+  { key: 'kpis',     label: 'KPIs',         desc: 'Mide el desempeño con indicadores clave',   color: '#10b981', type: 'kpi',      path: 'kpis'      },
+  { key: 'objetivos',label: 'Objetivos',    desc: 'Define metas y haz seguimiento de avance',  color: '#6366f1', type: 'objetivo', path: 'objetivos' },
+  { key: 'problemas',label: 'Problemas',    desc: 'Registra y resuelve obstáculos',            color: '#ef4444', type: 'problema', path: 'problemas' },
+  { key: 'ideas',    label: 'Ideas',        desc: 'Captura y evalúa ideas de mejora',          color: '#f59e0b', type: 'idea',     path: 'ideas'     },
+  { key: 'reuniones',label: 'Reuniones',    desc: 'Agenda juntas y registra acuerdos',         color: '#00d4ff', type: 'reunion',  path: 'reuniones' },
+  { key: 'decisiones',label:'Decisiones',  desc: 'Vota y documenta decisiones importantes',   color: '#6366f1', type: 'decision', path: 'decisiones'},
 ]
+
+function getSemana() {
+  const hoy = new Date()
+  const dow = hoy.getDay() === 0 ? 7 : hoy.getDay()
+  const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - dow + 1)
+  const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6)
+  const fmt = (d) => d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+  return {
+    inicio: lunes.toISOString().split('T')[0],
+    fin: domingo.toISOString().split('T')[0],
+    label: `${fmt(lunes)} – ${fmt(domingo)} ${hoy.getFullYear()}`
+  }
+}
 
 export default function Dashboard() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const { workspace, miembro } = useStore()
   const [stats, setStats] = useState({
-    tareasPendientes: 0, tareasHoy: 0,
+    tareasPendientes: 0, tareasHoy: 0, tareasEstaSemana: 0,
     kpisActivos: 0, objetivosActivos: 0,
     problemasAbiertos: 0, ideasPendientes: 0,
     reunionesHoy: 0, decisionesPendientes: 0
@@ -61,8 +69,11 @@ export default function Dashboard() {
     setLoading(true)
     const fabId = workspace.id
     const today = new Date().toISOString().split('T')[0]
+    const semana = getSemana()
+
     const [
       { count: tareasPendientes }, { count: tareasHoy },
+      { count: tareasEstaSemana },
       { count: kpisActivos }, { count: objetivosActivos },
       { count: problemasAbiertos }, { count: ideasPendientes },
       { count: reunionesHoy }, { count: decisionesPendientes },
@@ -70,6 +81,7 @@ export default function Dashboard() {
     ] = await Promise.all([
       supabase.from('bos_tareas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).not('estado', 'in', '("hecha","cancelada")'),
       supabase.from('bos_tareas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).eq('fecha_limite', today).not('estado', 'in', '("hecha","cancelada")'),
+      supabase.from('bos_tareas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).gte('fecha_limite', semana.inicio).lte('fecha_limite', semana.fin).not('estado', 'in', '("hecha","cancelada")'),
       supabase.from('bos_kpis').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).eq('activo', true),
       supabase.from('bos_objetivos').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).not('estado', 'in', '("completado","cancelado")'),
       supabase.from('bos_problemas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).not('estado', 'in', '("resuelto","descartado")'),
@@ -78,15 +90,31 @@ export default function Dashboard() {
       supabase.from('bos_decisiones').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).eq('estado', 'votacion'),
       supabase.from('bos_bitacora').select('*').eq('fabrica_id', fabId).order('created_at', { ascending: false }).limit(8)
     ])
-    setStats({ tareasPendientes: tareasPendientes||0, tareasHoy: tareasHoy||0, kpisActivos: kpisActivos||0, objetivosActivos: objetivosActivos||0, problemasAbiertos: problemasAbiertos||0, ideasPendientes: ideasPendientes||0, reunionesHoy: reunionesHoy||0, decisionesPendientes: decisionesPendientes||0 })
+
+    setStats({
+      tareasPendientes: tareasPendientes||0, tareasHoy: tareasHoy||0, tareasEstaSemana: tareasEstaSemana||0,
+      kpisActivos: kpisActivos||0, objetivosActivos: objetivosActivos||0,
+      problemasAbiertos: problemasAbiertos||0, ideasPendientes: ideasPendientes||0,
+      reunionesHoy: reunionesHoy||0, decisionesPendientes: decisionesPendientes||0
+    })
     setActividadReciente(bitacora || [])
     setLoading(false)
   }
 
   async function handleResumenIA() {
     setLoadingIA(true)
+    const semana = getSemana()
     try {
-      const prompt = `Eres el asistente de Business OS. Resume el estado actual del negocio "${workspace?.nombre}" en 3-4 oraciones ejecutivas basándote en estos datos:\n- Tareas pendientes: ${stats.tareasPendientes} (${stats.tareasHoy} vencen hoy)\n- KPIs activos: ${stats.kpisActivos}\n- Objetivos en curso: ${stats.objetivosActivos}\n- Problemas abiertos: ${stats.problemasAbiertos}\n- Ideas pendientes de evaluar: ${stats.ideasPendientes}\n- Reuniones hoy: ${stats.reunionesHoy}\n- Decisiones en votación: ${stats.decisionesPendientes}\n\nSé conciso, ejecutivo y menciona las prioridades más urgentes.`
+      const prompt = `Eres el asistente de Business OS. Resume el estado actual del negocio "${workspace?.nombre}" en 3-4 oraciones ejecutivas basándote en estos datos de la semana ${semana.label}:
+- Tareas pendientes: ${stats.tareasPendientes} (${stats.tareasHoy} vencen hoy, ${stats.tareasEstaSemana} esta semana)
+- KPIs activos: ${stats.kpisActivos}
+- Objetivos en curso: ${stats.objetivosActivos}
+- Problemas abiertos: ${stats.problemasAbiertos}
+- Ideas pendientes de evaluar: ${stats.ideasPendientes}
+- Reuniones hoy: ${stats.reunionesHoy}
+- Decisiones en votación: ${stats.decisionesPendientes}
+
+Sé conciso, ejecutivo y menciona las prioridades más urgentes.`
       const res = await generateSummary(prompt)
       setResumenIA(res)
     } catch (e) {
@@ -98,10 +126,11 @@ export default function Dashboard() {
 
   const totalDatos = stats.tareasPendientes + stats.kpisActivos + stats.objetivosActivos + stats.problemasAbiertos + stats.ideasPendientes + stats.reunionesHoy + stats.decisionesPendientes
   const esVacio = totalDatos === 0
+  const semana = getSemana()
 
   const STAT_CARDS = [
     { label: 'Tareas pendientes', value: stats.tareasPendientes, sub: stats.tareasHoy > 0 ? `${stats.tareasHoy} vencen hoy` : null, color: '#00d4ff', type: 'tarea', path: 'tareas', urgente: stats.tareasHoy > 0 },
-    { label: 'KPIs activos',       value: stats.kpisActivos,         color: '#10b981', type: 'kpi',      path: 'kpis'      },
+    { label: 'KPIs activos',        value: stats.kpisActivos,         color: '#10b981', type: 'kpi',      path: 'kpis'      },
     { label: 'Objetivos en curso',  value: stats.objetivosActivos,    color: '#6366f1', type: 'objetivo', path: 'objetivos' },
     { label: 'Problemas abiertos',  value: stats.problemasAbiertos,   color: '#ef4444', type: 'problema', path: 'problemas', urgente: stats.problemasAbiertos > 0 },
     { label: 'Ideas a evaluar',     value: stats.ideasPendientes,     color: '#f59e0b', type: 'idea',     path: 'ideas'     },
@@ -129,13 +158,29 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Onboarding — solo cuando workspace vacío */}
+      {/* Alerta de tareas próximas */}
+      {!esVacio && stats.tareasEstaSemana > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: stats.tareasHoy > 0 ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${stats.tareasHoy > 0 ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}`, borderRadius: 10, marginBottom: 16, cursor: 'pointer' }}
+          onClick={() => navigate(`/${slug}/tareas`)}
+        >
+          <div style={{ color: stats.tareasHoy > 0 ? '#ef4444' : '#f59e0b', flexShrink: 0 }}>{ICONS.alerta}</div>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: stats.tareasHoy > 0 ? '#ef4444' : '#d97706' }}>
+              {stats.tareasHoy > 0
+                ? `${stats.tareasHoy} tarea${stats.tareasHoy > 1 ? 's' : ''} vence${stats.tareasHoy === 1 ? '' : 'n'} hoy`
+                : `${stats.tareasEstaSemana} tarea${stats.tareasEstaSemana > 1 ? 's' : ''} vence${stats.tareasEstaSemana === 1 ? '' : 'n'} esta semana`}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 8 }}>Semana {semana.label}</span>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Ver →</span>
+        </div>
+      )}
+
+      {/* Onboarding — solo cuando vacío */}
       {esVacio && (
         <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(0,212,255,0.06) 100%)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 14, padding: '24px', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>
-              {ICONS.objetivo}
-            </div>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>{ICONS.objetivo}</div>
             <div>
               <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)', margin: 0 }}>Tu workspace está listo — ¡empieza aquí!</p>
               <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Elige por dónde quieres comenzar</p>
@@ -143,9 +188,7 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {MODULOS.map(m => (
-              <button
-                key={m.key}
-                onClick={() => navigate(`/${slug}/${m.path}`)}
+              <button key={m.key} onClick={() => navigate(`/${slug}/${m.path}`)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border-2)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.background = m.color + '0a' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.background = 'var(--bg-card)' }}
@@ -168,16 +211,13 @@ export default function Dashboard() {
             <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🤖</div>
             <div>
               <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', margin: 0 }}>Resumen ejecutivo IA</p>
-              {esVacio && <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>Disponible cuando tengas datos registrados</p>}
+              <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
+                {esVacio ? 'Disponible cuando tengas datos registrados' : `Analizando semana ${semana.label}`}
+              </p>
             </div>
           </div>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleResumenIA}
-            disabled={loadingIA || esVacio}
-            title={esVacio ? 'Agrega tus primeros datos para obtener un análisis' : ''}
-            style={{ opacity: esVacio ? 0.45 : 1 }}
-          >
+          <button className="btn btn-secondary btn-sm" onClick={handleResumenIA} disabled={loadingIA || esVacio}
+            title={esVacio ? 'Agrega tus primeros datos para obtener un análisis' : ''} style={{ opacity: esVacio ? 0.45 : 1 }}>
             {loadingIA ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : '✨ Generar resumen'}
           </button>
         </div>
@@ -192,18 +232,14 @@ export default function Dashboard() {
       {!esVacio && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12, marginBottom: 28 }}>
           {STAT_CARDS.map(card => (
-            <button
-              key={card.path}
-              onClick={() => navigate(`/${slug}/${card.path}`)}
+            <button key={card.path} onClick={() => navigate(`/${slug}/${card.path}`)}
               style={{ background: 'var(--bg-card)', border: `1px solid ${card.urgente ? card.color + '40' : 'var(--border)'}`, borderRadius: 'var(--radius)', padding: '16px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', gap: 10 }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = card.color + '60'; e.currentTarget.style.transform = 'translateY(-1px)' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = card.urgente ? card.color + '40' : 'var(--border)'; e.currentTarget.style.transform = 'none' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <IconBadge type={card.type} color={card.color} size={32} />
-                {card.urgente && (
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: card.color, boxShadow: `0 0 6px ${card.color}`, display: 'block' }} />
-                )}
+                {card.urgente && <span style={{ width: 8, height: 8, borderRadius: '50%', background: card.color, boxShadow: `0 0 6px ${card.color}`, display: 'block' }} />}
               </div>
               <div>
                 <div style={{ fontSize: 30, fontWeight: 800, color: card.color, lineHeight: 1 }}>{card.value}</div>
@@ -223,16 +259,13 @@ export default function Dashboard() {
         </div>
         {actividadReciente.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 0', gap: 8 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--bg-input)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)' }}>
-              {ICONS.general}
-            </div>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--bg-input)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)' }}>{ICONS.general}</div>
             <p style={{ color: 'var(--text-3)', fontSize: 13, margin: 0 }}>La actividad de tu equipo aparecerá aquí</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {actividadReciente.map(entry => (
-              <div key={entry.id}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8, transition: 'background 0.1s', cursor: 'default' }}
+              <div key={entry.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8, transition: 'background 0.1s' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-input)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
@@ -241,9 +274,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }} className="truncate">{entry.titulo}</div>
-                  {entry.descripcion && (
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }} className="truncate">{entry.descripcion}</div>
-                  )}
+                  {entry.descripcion && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }} className="truncate">{entry.descripcion}</div>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-3)', flexShrink: 0, paddingTop: 2 }}>
                   {new Date(entry.created_at).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}

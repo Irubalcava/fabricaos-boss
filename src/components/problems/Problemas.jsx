@@ -25,7 +25,7 @@ const IMPACTO_COLORS = {
 }
 
 function empty() {
-  return { titulo: '', descripcion: '', impacto: 'medio', estado: 'detectado', causas: [], solucion: '', responsable: '' }
+  return { titulo: '', descripcion: '', impacto: 'medio', estado: 'detectado', causas: [], solucion: '', responsable: '', crearTarea: false, prioridadTarea: 'alta' }
 }
 
 export default function Problemas() {
@@ -98,16 +98,23 @@ export default function Problemas() {
         if (error) throw error
         toast.success('Problema actualizado')
       } else {
-        const { error } = await supabase.from('bos_problemas').insert(payload)
+        const { data: prob, error } = await supabase.from('bos_problemas').insert(payload).select().single()
         if (error) throw error
         toast.success('Problema registrado')
-        await supabase.from('bos_bitacora').insert({
-          fabrica_id: workspace.id,
-          tipo: 'problema',
-          titulo: `Problema detectado: ${form.titulo}`,
-          automatico: true,
-          created_by: miembro?.profile_id
-        })
+        await supabase.from('bos_bitacora').insert({ fabrica_id: workspace.id, tipo: 'problema', titulo: `Problema detectado: ${form.titulo}`, automatico: true, created_by: miembro?.profile_id })
+        if (form.crearTarea) {
+          await supabase.from('bos_tareas').insert({
+            fabrica_id: workspace.id,
+            titulo: `Resolver: ${form.titulo}`,
+            descripcion: form.descripcion.trim() || null,
+            prioridad: form.prioridadTarea,
+            estado: 'pendiente',
+            asignado_a: form.responsable || null,
+            created_by: miembro?.profile_id
+          })
+          await supabase.from('bos_bitacora').insert({ fabrica_id: workspace.id, tipo: 'tarea', titulo: `Tarea creada desde problema: ${form.titulo}`, automatico: true, created_by: miembro?.profile_id })
+          toast.success('Tarea de seguimiento creada')
+        }
       }
       setModalOpen(false)
       loadProblemas()
@@ -318,6 +325,33 @@ export default function Problemas() {
               {miembros.map(m => <option key={m.profile_id} value={m.profile_id}>{m.nombre}</option>)}
             </select>
           </div>
+
+          {/* Auto-crear tarea */}
+          {!editId && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <div onClick={() => setForm(p => ({ ...p, crearTarea: !p.crearTarea }))}
+                  style={{ width: 36, height: 20, borderRadius: 10, background: form.crearTarea ? 'var(--accent)' : 'var(--bg-input)', border: `2px solid ${form.crearTarea ? 'var(--accent)' : 'var(--border-2)'}`, position: 'relative', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute', top: 2, left: form.crearTarea ? 16 : 2, width: 12, height: 12, borderRadius: '50%', background: form.crearTarea ? '#fff' : 'var(--text-3)', transition: 'left 0.2s' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>Crear tarea de seguimiento automáticamente</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>Se creará una tarea "Resolver: {form.titulo || '...'}" en el módulo de Tareas</p>
+                </div>
+              </label>
+              {form.crearTarea && (
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Prioridad de la tarea:</span>
+                  {['baja', 'media', 'alta', 'critica'].map(p => (
+                    <button key={p} type="button" onClick={() => setForm(f => ({ ...f, prioridadTarea: p }))}
+                      style={{ padding: '3px 10px', borderRadius: 6, border: `1px solid ${form.prioridadTarea === p ? 'var(--accent)' : 'var(--border-2)'}`, background: form.prioridadTarea === p ? 'var(--accent)15' : 'transparent', color: form.prioridadTarea === p ? 'var(--accent)' : 'var(--text-3)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </div>

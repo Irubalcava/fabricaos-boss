@@ -16,7 +16,7 @@ const ESTADO_COLORS = {
 }
 
 function empty() {
-  return { titulo: '', descripcion: '', responsable: '', fecha_inicio: '', fecha_fin: '', periodicidad: 'mensual', estado: 'activo' }
+  return { titulo: '', descripcion: '', responsable: '', fecha_inicio: '', fecha_fin: '', periodicidad: 'mensual', estado: 'activo', kpi_ids: [] }
 }
 
 export default function Objetivos() {
@@ -33,10 +33,16 @@ export default function Objetivos() {
   const [krList, setKrList] = useState([])
   const [newKr, setNewKr] = useState({ descripcion: '', meta: '', progreso: 0 })
   const [filtroEstado, setFiltroEstado] = useState('all')
+  const [kpisDisponibles, setKpisDisponibles] = useState([])
 
   useEffect(() => {
-    if (workspace?.id) loadObjetivos()
+    if (workspace?.id) { loadObjetivos(); loadKpisDisponibles() }
   }, [workspace])
+
+  async function loadKpisDisponibles() {
+    const { data } = await supabase.from('bos_kpis').select('id, nombre, unidad, tipo').eq('fabrica_id', workspace.id).eq('activo', true).order('nombre')
+    setKpisDisponibles(data || [])
+  }
 
   async function loadObjetivos() {
     setLoading(true)
@@ -79,6 +85,7 @@ export default function Objetivos() {
         fecha_fin: form.fecha_fin || null,
         periodicidad: form.periodicidad,
         estado: form.estado,
+        kpi_ids: form.kpi_ids?.length ? form.kpi_ids : null,
         created_by: miembro?.profile_id
       }
       if (editId) {
@@ -242,11 +249,24 @@ export default function Objetivos() {
                     {krs.length > 3 && (
                       <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, paddingLeft: 12 }}>+{krs.length - 3} más</div>
                     )}
+                    {obj.kpi_ids?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', alignSelf: 'center' }}>KPIs:</span>
+                        {obj.kpi_ids.map(kid => {
+                          const k = kpisDisponibles.find(k => k.id === kid)
+                          return k ? (
+                            <span key={kid} style={{ fontSize: 11, color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 99, padding: '1px 8px', fontWeight: 600 }}>
+                              📈 {k.nombre}
+                            </span>
+                          ) : null
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => openKrModal(obj)}>KRs</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => {
-                      setForm({ titulo: obj.titulo, descripcion: obj.descripcion || '', responsable: obj.responsable || '', fecha_inicio: obj.fecha_inicio || '', fecha_fin: obj.fecha_fin || '', periodicidad: obj.periodicidad || 'mensual', estado: obj.estado })
+                      setForm({ titulo: obj.titulo, descripcion: obj.descripcion || '', responsable: obj.responsable || '', fecha_inicio: obj.fecha_inicio || '', fecha_fin: obj.fecha_fin || '', periodicidad: obj.periodicidad || 'mensual', estado: obj.estado, kpi_ids: obj.kpi_ids || [] })
                       setEditId(obj.id)
                       setModalOpen(true)
                     }}>✏</button>
@@ -313,6 +333,28 @@ export default function Objetivos() {
               {miembros.map(m => <option key={m.profile_id} value={m.profile_id}>{m.nombre}</option>)}
             </select>
           </div>
+
+          {/* KPIs vinculados */}
+          {kpisDisponibles.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <label className="label" style={{ marginBottom: 8 }}>📈 KPIs vinculados a este objetivo</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {kpisDisponibles.map(k => {
+                  const sel = (form.kpi_ids || []).includes(k.id)
+                  return (
+                    <button key={k.id} type="button"
+                      onClick={() => setForm(p => ({ ...p, kpi_ids: sel ? p.kpi_ids.filter(id => id !== k.id) : [...(p.kpi_ids || []), k.id] }))}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99, border: `1px solid ${sel ? '#10b981' : 'var(--border-2)'}`, background: sel ? 'rgba(16,185,129,0.1)' : 'var(--bg-input)', color: sel ? '#10b981' : 'var(--text-2)', fontSize: 12, fontWeight: sel ? 700 : 400, cursor: 'pointer', transition: 'all 0.15s' }}>
+                      <span>{sel ? '✓' : '+'}</span> {k.nombre}{k.unidad ? ` (${k.unidad})` : ''}
+                    </button>
+                  )
+                })}
+              </div>
+              {(form.kpi_ids || []).length === 0 && (
+                <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>Selecciona los KPIs que miden el avance de este objetivo</p>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
 
