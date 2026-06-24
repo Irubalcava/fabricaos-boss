@@ -35,7 +35,7 @@ export default function Shell() {
   async function loadWorkspace() {
     setLoading(true)
     try {
-      // Load workspace by slug
+      // 1) workspace por slug — necesario primero para tener fab.id
       const { data: fab, error: fabErr } = await supabase
         .from('fabricas')
         .select('*')
@@ -50,53 +50,46 @@ export default function Shell() {
 
       setWorkspace(fab)
 
-      // Load current user's membership
-      const { data: mem } = await supabase
-        .from('colaboradores')
-        .select('*')
-        .eq('fabrica_id', fab.id)
-        .eq('profile_id', user.id)
-        .not('boss_rol', 'is', null)
-        .single()
+      // 2) resto de queries en paralelo
+      const today = new Date().toISOString().split('T')[0]
+      const [memRes, miembrosRes, tareasRes, notifRes] = await Promise.all([
+        supabase
+          .from('colaboradores')
+          .select('*')
+          .eq('fabrica_id', fab.id)
+          .eq('profile_id', user.id)
+          .not('boss_rol', 'is', null)
+          .single(),
+        supabase
+          .from('colaboradores')
+          .select('*, profiles:profile_id(nombre, email)')
+          .eq('fabrica_id', fab.id)
+          .not('boss_rol', 'is', null)
+          .neq('activo', false),
+        supabase
+          .from('bos_tareas')
+          .select('*', { count: 'exact', head: true })
+          .eq('fabrica_id', fab.id)
+          .lt('fecha_limite', today)
+          .not('estado', 'in', '("hecha","cancelada")'),
+        supabase
+          .from('bos_notificaciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('fabrica_id', fab.id)
+          .eq('destinatario_id', user.id)
+          .eq('leida', false)
+      ])
 
-      if (!mem) {
+      if (!memRes.data) {
         toast.error('No tienes acceso a este workspace')
         navigate('/select')
         return
       }
 
-      setMiembro(mem)
-
-      // Load all members
-      const { data: miembros } = await supabase
-        .from('colaboradores')
-        .select('*')
-        .eq('fabrica_id', fab.id)
-        .not('boss_rol', 'is', null)
-        .neq('activo', false)
-
-      setMiembros(miembros || [])
-
-      // Count overdue tasks
-      const today = new Date().toISOString().split('T')[0]
-      const { count } = await supabase
-        .from('bos_tareas')
-        .select('*', { count: 'exact', head: true })
-        .eq('fabrica_id', fab.id)
-        .lt('fecha_limite', today)
-        .not('estado', 'in', '("hecha","cancelada")')
-
-      setTareasVencidas(count || 0)
-
-      // Count unread notifications
-      const { count: notifCount } = await supabase
-        .from('bos_notificaciones')
-        .select('*', { count: 'exact', head: true })
-        .eq('fabrica_id', fab.id)
-        .eq('destinatario_id', user.id)
-        .eq('leida', false)
-
-      setNotifCount(notifCount || 0)
+      setMiembro(memRes.data)
+      setMiembros(miembrosRes.data || [])
+      setTareasVencidas(tareasRes.count || 0)
+      setNotifCount(notifRes.count || 0)
 
     } catch (err) {
       console.error(err)
