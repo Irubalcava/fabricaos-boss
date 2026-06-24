@@ -11,6 +11,7 @@ import Tareas from '../tasks/Tareas.jsx'
 import Objetivos from '../objectives/Objetivos.jsx'
 import Reuniones from '../meetings/Reuniones.jsx'
 import Decisiones from '../decisions/Decisiones.jsx'
+import KPIs from '../kpis/KPIs.jsx'
 import Problemas from '../problems/Problemas.jsx'
 import Ideas from '../ideas/Ideas.jsx'
 import Bitacora from '../bitacora/Bitacora.jsx'
@@ -155,6 +156,7 @@ export default function Shell() {
             <Route path="dashboard"    element={<Dashboard />} />
             <Route path="tareas"       element={<Tareas />} />
             <Route path="objetivos"    element={<Objetivos />} />
+            <Route path="kpis"         element={<KPIs />} />
             <Route path="reuniones"    element={<Reuniones />} />
             <Route path="decisiones"   element={<Decisiones />} />
             <Route path="problemas"    element={<Problemas />} />

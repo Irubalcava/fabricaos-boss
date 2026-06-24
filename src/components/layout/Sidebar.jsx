@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { path: 'dashboard',     icon: '📊', label: 'Dashboard' },
   { path: 'tareas',        icon: '✅', label: 'Tareas' },
   { path: 'objetivos',     icon: '🎯', label: 'Objetivos' },
+  { path: 'kpis',          icon: '📈', label: 'KPIs' },
   { path: 'reuniones',     icon: '🤝', label: 'Reuniones' },
   { path: 'problemas',     icon: '🔧', label: 'Problemas' },
   { path: 'ideas',         icon: '💡', label: 'Ideas' },
