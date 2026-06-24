@@ -107,7 +107,28 @@ export default function Tareas() {
   }
 
   function addItem() {
-    setForm(p => ({ ...p, presupuesto: [...p.presupuesto, { id: uid(), concepto: '', precio: '', tienda: '', link: '' }] }))
+    setForm(p => ({ ...p, presupuesto: [...p.presupuesto, { id: uid(), concepto: '', para_que: '', precio: '', tienda: '', link: '' }] }))
+  }
+
+  function exportarPresupuestos() {
+    const conPresupuesto = tareas.filter(t => t.presupuesto?.length > 0)
+    if (!conPresupuesto.length) { toast.error('No hay presupuestos para exportar'); return }
+    const filas = [['Tarea', 'Estado', 'Prioridad', 'Concepto', 'Para qué', 'Precio', 'Dónde comprar', 'Link']]
+    conPresupuesto.forEach(t => {
+      t.presupuesto.forEach(it => {
+        filas.push([t.titulo, t.estado, t.prioridad, it.concepto || '', it.para_que || '', parseFloat(it.precio) || 0, it.tienda || '', it.link || ''])
+      })
+      const total = totalPresupuesto(t.presupuesto)
+      if (t.presupuesto.length > 1) filas.push([t.titulo, '', '', 'TOTAL', '', total, '', ''])
+    })
+    const csv = filas.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `presupuestos_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   function updateItem(id, field, val) {
@@ -134,7 +155,12 @@ export default function Tareas() {
     <div className="page">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Tareas</h1>
-        <button className="btn btn-primary" onClick={() => { setForm(empty()); setShowPresupuesto(false); setEditId(null); setModalOpen(true) }}>+ Nueva tarea</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {tareas.some(t => t.presupuesto?.length > 0) && (
+            <button className="btn btn-secondary" onClick={exportarPresupuestos}>⬇ Excel</button>
+          )}
+          <button className="btn btn-primary" onClick={() => { setForm(empty()); setShowPresupuesto(false); setEditId(null); setModalOpen(true) }}>+ Nueva tarea</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -252,10 +278,14 @@ export default function Tareas() {
             {showPresupuesto && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {form.presupuesto.map((item, i) => (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 1fr auto', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8, border: '1px solid var(--border-2)' }}>
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 1fr auto', gap: 8, alignItems: 'start', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8, border: '1px solid var(--border-2)' }}>
                     <div>
                       <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>Concepto</p>
                       <input className="input" style={{ fontSize: 12 }} value={item.concepto} onChange={e => updateItem(item.id, 'concepto', e.target.value)} placeholder={`Ítem ${i + 1}`} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>Para qué</p>
+                      <input className="input" style={{ fontSize: 12 }} value={item.para_que || ''} onChange={e => updateItem(item.id, 'para_que', e.target.value)} placeholder="Propósito del gasto" />
                     </div>
                     <div>
                       <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>Precio</p>
@@ -265,8 +295,7 @@ export default function Tareas() {
                       <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>Dónde comprar</p>
                       <input className="input" style={{ fontSize: 12 }} value={item.tienda} onChange={e => updateItem(item.id, 'tienda', e.target.value)} placeholder="Tienda o proveedor" />
                     </div>
-                    <button type="button" onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 16, cursor: 'pointer', padding: '4px', alignSelf: 'flex-end', lineHeight: 1 }}>✕</button>
-                    {/* Link en fila completa */}
+                    <button type="button" onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 16, cursor: 'pointer', padding: '4px', marginTop: 20, lineHeight: 1 }}>✕</button>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '6px 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>Link del producto</p>
                       <input className="input" style={{ fontSize: 12 }} type="url" value={item.link} onChange={e => updateItem(item.id, 'link', e.target.value)} placeholder="https://..." />

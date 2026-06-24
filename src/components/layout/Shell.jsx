@@ -9,7 +9,6 @@ import { toast } from '../ui/Toast.jsx'
 // Lazy imports for modules
 import Dashboard from '../dashboard/Dashboard.jsx'
 import Tareas from '../tasks/Tareas.jsx'
-import KPIs from '../kpis/KPIs.jsx'
 import Objetivos from '../objectives/Objetivos.jsx'
 import Reuniones from '../meetings/Reuniones.jsx'
 import Decisiones from '../decisions/Decisiones.jsx'
@@ -137,7 +136,6 @@ export default function Shell() {
           <Routes>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="tareas" element={<Tareas />} />
-            <Route path="kpis" element={<KPIs />} />
             <Route path="objetivos" element={<Objetivos />} />
             <Route path="reuniones" element={<Reuniones />} />
             <Route path="decisiones" element={<Decisiones />} />

@@ -5,7 +5,6 @@ import { useStore } from '../../store/index.js'
 const NAV_ITEMS = [
   { path: 'dashboard',     icon: '📊', label: 'Dashboard' },
   { path: 'tareas',        icon: '✅', label: 'Tareas' },
-  { path: 'kpis',          icon: '📈', label: 'KPIs' },
   { path: 'objetivos',     icon: '🎯', label: 'Objetivos' },
   { path: 'reuniones',     icon: '🤝', label: 'Reuniones' },
   { path: 'problemas',     icon: '🔧', label: 'Problemas' },
