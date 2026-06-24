@@ -253,8 +253,8 @@ Dame un resumen ejecutivo en 3 oraciones. Prioriza lo urgente. Sé directo, sin 
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-1)', marginBottom: 4 }}>
-              {getSaludo()}{miembro?.nombre ? `, ${miembro.nombre.split(' ')[0]}` : ''} 👋
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--text-1)', marginBottom: 4, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+              {getSaludo()}, {getNombre(miembro?.profile_id)?.split(' ')[0] || workspace?.nombre || 'bienvenido'} 👋
             </h1>
             <p style={{ color: 'var(--text-3)', fontSize: 13, textTransform: 'capitalize' }}>{nombreDia}</p>
           </div>
@@ -324,30 +324,28 @@ Dame un resumen ejecutivo en 3 oraciones. Prioriza lo urgente. Sé directo, sin 
         </div>
       )}
 
-      {/* ── 3 BIG NUMBERS ── */}
-      {hayDatos && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-          <BigStat
-            value={stats.tareasPendientes}
-            label="Tareas pendientes"
-            sub={stats.tareasVencidas > 0 ? `${stats.tareasVencidas} vencidas` : null}
-            color="#00d4ff"
-            onClick={() => navigate(`/${slug}/tareas`)}
-          />
-          <BigStat
-            value={stats.objetivosActivos}
-            label="Objetivos activos"
-            color="#6366f1"
-            onClick={() => navigate(`/${slug}/objetivos`)}
-          />
-          <BigStat
-            value={stats.problemasAbiertos}
-            label="Problemas abiertos"
-            color={stats.problemasAbiertos > 0 ? '#ef4444' : 'var(--text-3)'}
-            onClick={() => navigate(`/${slug}/problemas`)}
-          />
-        </div>
-      )}
+      {/* ── 3 BIG NUMBERS — siempre visibles ── */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        <BigStat
+          value={stats.tareasPendientes}
+          label="Tareas pendientes"
+          sub={stats.tareasVencidas > 0 ? `${stats.tareasVencidas} vencidas` : null}
+          color="#00d4ff"
+          onClick={() => navigate(`/${slug}/tareas`)}
+        />
+        <BigStat
+          value={stats.objetivosActivos}
+          label="Objetivos activos"
+          color="#6366f1"
+          onClick={() => navigate(`/${slug}/objetivos`)}
+        />
+        <BigStat
+          value={stats.problemasAbiertos}
+          label="Problemas abiertos"
+          color={stats.problemasAbiertos > 0 ? '#ef4444' : 'var(--text-3)'}
+          onClick={() => navigate(`/${slug}/problemas`)}
+        />
+      </div>
 
       {/* ── OBJETIVOS ── */}
       {objetivos.length > 0 && (
@@ -425,25 +423,42 @@ Dame un resumen ejecutivo en 3 oraciones. Prioriza lo urgente. Sé directo, sin 
         )}
       </div>
 
-      {/* ── ONBOARDING vacío ── */}
-      {!hayDatos && (
-        <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(0,212,255,0.06) 100%)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 14, padding: '28px 24px', marginBottom: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
-          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 6 }}>Tu workspace está listo</p>
-          <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>Empieza creando un objetivo o registrando tus primeras tareas</p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {[
-              { label: '🎯 Crear objetivo', path: 'objetivos' },
-              { label: '✅ Agregar tarea', path: 'tareas' },
-              { label: '⚡ Registrar problema', path: 'problemas' },
-            ].map(item => (
-              <button key={item.path} className="btn btn-secondary" onClick={() => navigate(`/${slug}/${item.path}`)}>
-                {item.label}
-              </button>
-            ))}
+      {/* ── ACCIONES RÁPIDAS — siempre visibles, con más peso visual ── */}
+      <div style={{ marginBottom: 24 }}>
+        {!hayDatos && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+            ¿Por dónde empezamos?
           </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+          {[
+            { label: 'Crear objetivo',     desc: 'Define una meta con plan y métricas',  path: 'objetivos', color: '#6366f1', icon: '🎯' },
+            { label: 'Agregar tarea',      desc: 'Registra trabajo pendiente del equipo', path: 'tareas',    color: '#00d4ff', icon: '✅' },
+            { label: 'Registrar problema', desc: 'Captura un bloqueador para resolverlo', path: 'problemas', color: '#ef4444', icon: '⚡' },
+          ].map(item => (
+            <button key={item.path} onClick={() => navigate(`/${slug}/${item.path}`)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 16px',
+                background: item.color + '10',
+                border: `1px solid ${item.color}25`,
+                borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = item.color + '1e'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = item.color + '10'; e.currentTarget.style.transform = 'none' }}
+            >
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: item.color + '20', border: `1px solid ${item.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>
+                {item.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 1 }}>{item.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.3 }}>{item.desc}</div>
+              </div>
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* ── ACTIVIDAD ── */}
       {actividad.length > 0 && (
