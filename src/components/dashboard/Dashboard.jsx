@@ -130,10 +130,34 @@ export default function Dashboard() {
   const esLunes = new Date().getDay() === 1
   const nombreDia = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  // Sucursal filter helper
-  const addSucursalFilter = (q) => {
-    if (sucursal?.id) return q.eq('sucursal_id', sucursal.id)
-    return q
+  const CACHE_TTL = 3 * 60 * 1000 // 3 minutos
+
+  function getDashCache(key) {
+    try {
+      const item = localStorage.getItem(key)
+      if (!item) return null
+      const { data, ts } = JSON.parse(item)
+      if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(key); return null }
+      return data
+    } catch { return null }
+  }
+
+  function setDashCache(key, data) {
+    try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+  }
+
+  function applyDashboardData(d) {
+    setStats({
+      tareasPendientes:  d.tareas_pendientes  || 0,
+      tareasVencidas:    d.tareas_vencidas    || 0,
+      objetivosActivos:  d.objetivos_activos  || 0,
+      problemasAbiertos: d.problemas_abiertos || 0,
+    })
+    setTareasHoy(d.tareas_hoy    || [])
+    setReunionesHoy(d.reuniones_hoy || [])
+    setObjetivos(d.objetivos     || [])
+    setProblemas(d.problemas     || [])
+    setActividad(d.actividad     || [])
   }
 
   useEffect(() => {
@@ -151,81 +175,26 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true)
     const fabId = workspace.id
+    const cacheKey = `dash_${fabId}_${sucursal?.id || 'all'}_${today}`
 
-    // Base query builder
-    const q = (table) => {
-      let base = supabase.from(table).select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId)
-      return addSucursalFilter(base)
+    const cached = getDashCache(cacheKey)
+    if (cached) {
+      applyDashboardData(cached)
+      setLoading(false)
+      return
     }
 
     try {
-      const [
-        tareasRes, vencidasRes, objCountRes, probCountRes,
-        tareasHoyRes, reunionesRes, objetivosRes, problemasRes, actividadRes
-      ] = await Promise.all([
-        // Counts
-        q('bos_tareas').not('estado', 'in', '("hecha","cancelada")'),
-        q('bos_tareas').lt('fecha_limite', today).not('estado', 'in', '("hecha","cancelada")'),
-        q('bos_objetivos').not('estado', 'in', '("completado","cancelado")'),
-        q('bos_problemas').not('estado', 'in', '("resuelto","descartado")'),
-
-        // Tareas de hoy (items reales)
-        addSucursalFilter(
-          supabase.from('bos_tareas').select('id,titulo,prioridad,estado,responsable_id').eq('fabrica_id', fabId).eq('fecha_limite', today).not('estado', 'in', '("hecha","cancelada")')
-        ).limit(6),
-
-        // Reuniones de hoy
-        addSucursalFilter(
-          supabase.from('bos_reuniones').select('id,titulo,hora_inicio,sucursal').eq('fabrica_id', fabId).eq('fecha', today)
-        ).order('hora_inicio'),
-
-        // Objetivos activos con area y tipo
-        addSucursalFilter(
-          supabase.from('bos_objetivos').select('id,titulo,area,tipo,estado,created_at,fecha_fin').eq('fabrica_id', fabId).not('estado', 'in', '("completado","cancelado")')
-        ).order('created_at', { ascending: false }).limit(6),
-
-        // Problemas abiertos
-        addSucursalFilter(
-          supabase.from('bos_problemas').select('id,titulo,prioridad,estado,created_at').eq('fabrica_id', fabId).not('estado', 'in', '("resuelto","descartado")')
-        ).order('created_at', { ascending: false }).limit(5),
-
-        // Actividad
-        supabase.from('bos_bitacora').select('*').eq('fabrica_id', fabId).order('created_at', { ascending: false }).limit(6)
-      ])
-
-      setStats({
-        tareasPendientes: tareasRes.count || 0,
-        tareasVencidas:   vencidasRes.count || 0,
-        objetivosActivos: objCountRes.count || 0,
-        problemasAbiertos: probCountRes.count || 0
+      const { data, error } = await supabase.rpc('bos_dashboard_completo', {
+        p_fabrica_id:  fabId,
+        p_sucursal_id: sucursal?.id || null,
+        p_fecha:       today,
       })
-      setTareasHoy(tareasHoyRes.data || [])
-      setReunionesHoy(reunionesRes.data || [])
-      setActividad(actividadRes.data || [])
-
-      // Objetivos con conteo de tareas
-      const objs = objetivosRes.data || []
-      if (objs.length > 0) {
-        const tareasPromises = objs.map(obj =>
-          Promise.all([
-            supabase.from('bos_tareas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).eq('objetivo_id', obj.id).eq('estado', 'hecha'),
-            supabase.from('bos_tareas').select('*', { count: 'exact', head: true }).eq('fabrica_id', fabId).eq('objetivo_id', obj.id)
-          ])
-        )
-        const resultados = await Promise.all(tareasPromises)
-        const objsConProg = objs.map((obj, i) => ({
-          ...obj,
-          _tareas_hechas: resultados[i][0].count || 0,
-          _tareas_total:  resultados[i][1].count || 0
-        }))
-        setObjetivos(objsConProg)
-      } else {
-        setObjetivos([])
-      }
-
-      setProblemas(problemasRes.data || [])
+      if (error) throw error
+      setDashCache(cacheKey, data)
+      applyDashboardData(data)
     } catch (err) {
-      console.error(err)
+      console.error('Dashboard RPC error:', err)
     } finally {
       setLoading(false)
     }
