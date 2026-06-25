@@ -52,8 +52,9 @@ export default function Shell() {
       }
 
       if (!fab.boss_is_active) {
-        toast.error('Business OS no está activo para este workspace. Contacta a soporte.')
-        navigate('/select')
+        // Guardar el fabrica_id para que WorkspaceSelect muestre el CTA de upgrade
+        sessionStorage.setItem('boss_upgrade_hint', fab.id)
+        navigate('/select', { replace: true })
         return
       }
 
