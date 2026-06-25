@@ -17,18 +17,56 @@ import Ideas from '../ideas/Ideas.jsx'
 import Bitacora from '../bitacora/Bitacora.jsx'
 import Configuracion from '../settings/Configuracion.jsx'
 
+function BossPastDueBanner() {
+  const [loading, setLoading] = React.useState(false)
+  async function abrirPortal() {
+    setLoading(true)
+    const { data, error } = await supabase.functions.invoke('stripe-billing-portal', {})
+    setLoading(false)
+    if (error || data?.error) { toast.error(data?.error || error?.message || 'Error al abrir portal'); return }
+    if (data?.url) window.open(data.url, '_blank')
+  }
+  return (
+    <div style={{
+      position:'fixed', top:0, left:0, right:0, zIndex:9500,
+      background:'linear-gradient(90deg,#b45309,#d97706)',
+      color:'#fff', padding:'10px 20px',
+      display:'flex', alignItems:'center', justifyContent:'center', gap:16,
+      fontSize:13, fontWeight:600,
+    }}>
+      <span>⚠️ Tu pago de Business OS está pendiente. Actualiza tu tarjeta para evitar la suspensión.</span>
+      <button
+        onClick={abrirPortal}
+        disabled={loading}
+        style={{
+          background:'rgba(255,255,255,.2)', color:'#fff',
+          padding:'4px 14px', borderRadius:99,
+          fontSize:12, border:'none', cursor: loading ? 'not-allowed' : 'pointer',
+          whiteSpace:'nowrap', fontWeight:700,
+        }}
+      >
+        {loading ? 'Abriendo...' : 'Actualizar pago →'}
+      </button>
+    </div>
+  )
+}
+
+const BOSS_OWNER_ROLES = new Set(['owner','admin','dueno','dueño','super_admin'])
+
 export default function Shell() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const {
     setWorkspace, setMiembro, setMiembros, setNotifCount,
     setSucursales, setSucursal,
+    miembro,
     user
   } = useStore()
 
   const [loading, setLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [tareasVencidas, setTareasVencidas] = useState(0)
+  const [bossPastDue, setBossPastDue] = useState(false)
 
   useEffect(() => {
     if (!user || !slug) return
@@ -59,6 +97,7 @@ export default function Shell() {
       }
 
       setWorkspace(fab)
+      if (fab.boss_subscription_status === 'past_due') setBossPastDue(true)
 
       // Aplicar color primario del workspace como variable CSS
       if (fab.color_primario) {
@@ -163,7 +202,9 @@ export default function Shell() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', flexDirection: 'column' }}>
+      {bossPastDue && BOSS_OWNER_ROLES.has(miembro?.boss_rol) && <BossPastDueBanner />}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <Sidebar collapsed={sidebarCollapsed} tareasVencidas={tareasVencidas} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header
@@ -185,6 +226,7 @@ export default function Shell() {
             <Route path="*"            element={<Navigate to="dashboard" replace />} />
           </Routes>
         </main>
+      </div>
       </div>
     </div>
   )
